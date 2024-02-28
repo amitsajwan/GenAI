@@ -25,8 +25,7 @@ const url = "https://api-defect.azure-api.net/defects/";
 fetch(url, {
   method: "POST",
   body: JSON.stringify(requestBody),
-  headers: requestHeaders,
-  mode: "no-cors"
+  headers: requestHeaders 
 })
 	.then((response) => {
 	if (response.ok) {
