@@ -19,7 +19,7 @@ requestHeaders.append("Authorization", "Bearer " + apiKey)
 // Remove this line to have the request observe the endpoint traffic rules
 requestHeaders.append("azureml-model-deployment", "amitsajwan-project-1-btrga-1");
 
-const url = "https://amitsajwan-project-1-btrga.eastus.inference.ml.azure.com/score";
+const url = "https://api-defect.azure-api.net/defects/";
 
 
 fetch(url, {
