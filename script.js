@@ -6,7 +6,7 @@ const requestBody = {
 
 const requestHeaders = new Headers({
   "Content-Type": "application/json",
-  "Authorization": "Bearer " + apiKey,
+  "Authorization": "Bearer noOjCLypMfKQQTwh8JuJU98vBLpheZuQ" ,
   "azureml-model-deployment": "amitsajwan-project-1-btrga-1"
 });
 
