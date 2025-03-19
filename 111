@@ -1,0 +1,54 @@
+import asyncio
+from langraph.graph import Graph
+
+async def execute_api(state, api_name):
+    """
+    Executes a single API call within the workflow.
+    
+    Args:
+        state (dict): The shared workflow state.
+        api_name (str): The name of the API to execute.
+
+    Returns:
+        dict: Updated workflow state.
+    """
+    from utils.api_utils import call_api  # Import dynamically to avoid circular imports
+    
+    print(f"🚀 Executing API: {api_name}")
+    response = await call_api(api_name, state)
+    
+    # Store response in state
+    state[api_name] = response
+    return state
+
+async def execute_workflow(api_details, execution_sequence):
+    """
+    Constructs and runs a Langraph workflow for API execution.
+    
+    Args:
+        api_details (dict): Extracted API details from OpenAPI.
+        execution_sequence (list): Ordered sequence of API calls.
+    """
+    workflow = Graph()
+
+    # Start node
+    start = workflow.add_node(lambda state: state)
+
+    # API Execution Nodes
+    api_nodes = {}
+    for api_name in execution_sequence:
+        api_nodes[api_name] = workflow.add_node(
+            lambda state, name=api_name: asyncio.run(execute_api(state, name))
+        )
+
+    # End node
+    end = workflow.add_node(lambda state: state)
+
+    # Define Transitions
+    workflow.add_transition(start, api_nodes[execution_sequence[0]])
+    for i in range(len(execution_sequence) - 1):
+        workflow.add_transition(api_nodes[execution_sequence[i]], api_nodes[execution_sequence[i + 1]])
+    workflow.add_transition(api_nodes[execution_sequence[-1]], end)
+
+    print("🚦 Running API Workflow...")
+    workflow.run({})  # Start with an empty state
