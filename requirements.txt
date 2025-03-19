@@ -1,0 +1,4 @@
+langchain
+langraph
+docx
+requests
