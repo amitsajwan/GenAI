@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Testing Chat</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; background-color: #f4f4f4; }
+        .chat-container { width: 50%; margin: auto; background: white; padding: 10px; border-radius: 5px; box-shadow: 0px 0px 10px #ccc; }
+        #messages { height: 300px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; background: #f9f9f9; text-align: left; }
+        button { margin-top: 10px; padding: 10px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        select, textarea { width: 100%; padding: 5px; margin-top: 5px; }
+    </style>
+</head>
+<body>
+
+    <h2>API Testing Chat</h2>
+    <div class="chat-container">
+        <div id="messages"></div>
+
+        <h4>Select APIs to Execute:</h4>
+        <select id="apiSequence" multiple></select>
+        <button onclick="confirmSequence()">Confirm Sequence</button>
+
+        <h4>Modify Payload:</h4>
+        <textarea id="payloadInput"></textarea>
+        <button onclick="confirmPayload()">Confirm Payload</button>
+
+        <button onclick="startExecution()" disabled id="startBtn">Start Execution</button>
+    </div>
+
+    <script>
+        const ws = new WebSocket("ws://localhost:8000/chat");
+        let selectedApis = [];
+        let currentPayload = {};
+
+        ws.onopen = function() {
+            ws.send(JSON.stringify({ action: "list" }));
+        };
+
+        ws.onmessage = function(event) {
+            const msgDiv = document.getElementById("messages");
+            const data = JSON.parse(event.data);
+
+            if (data.message) {
+                msgDiv.innerHTML += `<p>${data.message}</p>`;
+            }
+
+            if (data.apis) {
+                const apiDropdown = document.getElementById("apiSequence");
+                apiDropdown.innerHTML = "";
+                data.apis.forEach(api => {
+                    const option = document.createElement("option");
+                    option.value = api;
+                    option.textContent = api;
+                    apiDropdown.appendChild(option);
+                });
+            }
+
+            if (data.payload) {
+                document.getElementById("payloadInput").value = JSON.stringify(data.payload, null, 2);
+                currentPayload = data.payload;
+            }
+
+            if (data.api) {
+                msgDiv.innerHTML += `<p>Executed: ${data.api} → Status: ${data.status} (Time: ${data.time}s)</p>`;
+            }
+        };
+
+        function confirmSequence() {
+            selectedApis = Array.from(document.getElementById("apiSequence").selectedOptions).map(opt => opt.value);
+            ws.send(JSON.stringify({ action: "confirm_sequence", sequence: selectedApis }));
+            document.getElementById("startBtn").disabled = false;
+        }
+
+        function confirmPayload() {
+            try {
+                currentPayload = JSON.parse(document.getElementById("payloadInput").value);
+                ws.send(JSON.stringify({ action: "confirm_payload", payload: currentPayload }));
+            } catch (e) {
+                alert("Invalid JSON format.");
+            }
+        }
+
+        function startExecution() {
+            ws.send(JSON.stringify({ action: "start_execution" }));
+        }
+    </script>
+
+</body>
+</html>
