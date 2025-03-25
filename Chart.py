@@ -1,7 +1,6 @@
 import dash
-from dash import dcc, html, Input, Output
+from dash import html, Output, Input, ctx
 import dash_cytoscape as cyto
-import networkx as nx
 import json
 
 # API Execution DAG JSON
@@ -16,17 +15,10 @@ api_dag_json = '''
   ]
 }
 '''
-
-# Load JSON
 data = json.loads(api_dag_json)
 
-# Create DAG
-G = nx.DiGraph()
-G.add_nodes_from(data["nodes"])
-G.add_edges_from([(edge["from"], edge["to"]) for edge in data["edges"]])
-
-# Convert DAG to Cytoscape format
-elements = [{"data": {"id": node, "label": node}} for node in G.nodes()]
+# Convert JSON to Cytoscape format
+elements = [{"data": {"id": node, "label": node}} for node in data["nodes"]]
 elements += [{"data": {"source": edge["from"], "target": edge["to"]}} for edge in data["edges"]]
 
 # Dash App
@@ -37,7 +29,7 @@ app.layout = html.Div([
     
     cyto.Cytoscape(
         id="dag",
-        layout={"name": "cose"},  # Auto-layout
+        layout={"name": "cose"},
         style={"width": "100%", "height": "500px"},
         elements=elements,
         stylesheet=[
@@ -45,29 +37,41 @@ app.layout = html.Div([
             {"selector": "edge", "style": {"line-color": "gray", "width": 2}},
         ],
     ),
-
+    
     html.Button("Save Execution Order", id="save-btn", n_clicks=0),
+    html.Button("Delete Selected", id="delete-btn", n_clicks=0, style={"margin-left": "10px"}),
     html.Pre(id="output", style={"border": "1px solid black", "padding": "10px", "margin-top": "10px"}),
 ])
+
+@app.callback(
+    Output("dag", "elements"),
+    Input("delete-btn", "n_clicks"),
+    Input("dag", "elements"),
+    prevent_initial_call=True
+)
+def delete_selected_edge(n_clicks, elements):
+    """Delete the selected node/edge when 'Delete Selected' is clicked."""
+    if ctx.triggered_id == "delete-btn":
+        return [e for e in elements if not e.get("selected", False)]
+    return elements
 
 @app.callback(
     Output("output", "children"),
     Input("save-btn", "n_clicks"),
     Input("dag", "elements")
 )
-def update_execution_order(n_clicks, elements):
+def save_execution_order(n_clicks, elements):
+    """Save the new execution order after modifying edges."""
     if n_clicks > 0:
-        # Extract nodes and edges from modified graph
         new_edges = [
             {"from": edge["data"]["source"], "to": edge["data"]["target"]}
             for edge in elements if "source" in edge["data"]
         ]
         new_nodes = list(set(node["data"]["id"] for node in elements if "id" in node["data"]))
-
-        # Update JSON dynamically
         updated_json = json.dumps({"nodes": new_nodes, "edges": new_edges}, indent=2)
         return updated_json
-    return "Click 'Save Execution Order' to update JSON."
+    return "Modify the graph and click 'Save Execution Order'."
 
 if __name__ == "__main__":
     app.run_server(debug=True)
+  
