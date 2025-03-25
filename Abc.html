@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive DAG Visualization</title>
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dagre-d3/0.6.4/dagre-d3.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; background-color: #f4f4f4; }
+        #graph-container { width: 100%; height: 500px; border: 1px solid black; background: white; }
+        button { margin: 10px; padding: 10px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+    </style>
+</head>
+<body>
+
+    <h2>Interactive DAG Visualization</h2>
+    <button onclick="addNode()">Add Node</button>
+    <button onclick="clearGraph()">Clear Graph</button>
+    <div id="graph-container">
+        <svg width="800" height="500"><g></g></svg>
+    </div>
+
+    <script>
+        // Initialize Dagre-D3 graph
+        const g = new dagreD3.graphlib.Graph().setGraph({ rankdir: "LR" });
+
+        function renderGraph() {
+            d3.select("svg").selectAll("*").remove();
+            const inner = d3.select("svg").append("g");
+
+            // Render the graph
+            const render = new dagreD3.render();
+            render(inner, g);
+
+            // Enable zooming & panning
+            d3.select("svg").call(d3.zoom().on("zoom", ({ transform }) => inner.attr("transform", transform)));
+        }
+
+        function addNode() {
+            const nodeCount = g.nodeCount() + 1;
+            const nodeId = `Node ${nodeCount}`;
+            g.setNode(nodeId, { label: nodeId, width: 100, height: 40, style: "fill: lightblue; stroke: #000;" });
+
+            // Randomly connect new node to existing ones
+            if (nodeCount > 1) {
+                const existingNodes = g.nodes();
+                const randomNode = existingNodes[Math.floor(Math.random() * existingNodes.length)];
+                g.setEdge(randomNode, nodeId);
+            }
+
+            renderGraph();
+        }
+
+        function clearGraph() {
+            g.nodes().forEach(node => g.removeNode(node));
+            g.edges().forEach(edge => g.removeEdge(edge));
+            renderGraph();
+        }
+
+        // Initial render
+        renderGraph();
+    </script>
+
+</body>
+</html>
