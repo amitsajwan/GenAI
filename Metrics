@@ -1,0 +1,45 @@
+import requests
+import matplotlib.pyplot as plt
+import time
+
+METRICS_URL = "http://localhost:8000/metrics"
+
+def fetch_metrics():
+    """Fetches Prometheus metrics from FastAPI's /metrics endpoint."""
+    response = requests.get(METRICS_URL)
+    if response.status_code != 200:
+        print("Failed to fetch metrics")
+        return {}
+    
+    metrics = {}
+    for line in response.text.split("\n"):
+        if line.startswith("api_latency_seconds_bucket"):  # Extract latency values
+            parts = line.split()
+            labels = parts[0].split("{")[-1].split("}")[0].split(",")
+            api_name = labels[0].split("=")[-1].strip('"')
+            latency = float(parts[-1])
+            metrics.setdefault(api_name, []).append(latency)
+
+    return metrics
+
+def plot_metrics():
+    """Plots API latency over time."""
+    plt.figure(figsize=(10, 5))
+    
+    for _ in range(10):  # Fetch data 10 times for live updates
+        metrics = fetch_metrics()
+        plt.clf()
+
+        for api, latencies in metrics.items():
+            plt.plot(range(len(latencies)), latencies, label=f"{api} latency")
+
+        plt.xlabel("API Calls")
+        plt.ylabel("Latency (seconds)")
+        plt.title("API Latency Over Time")
+        plt.legend()
+        plt.pause(2)  # Refresh every 2 seconds
+
+    plt.show()
+
+if __name__ == "__main__":
+    plot_metrics()
