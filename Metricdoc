@@ -1,0 +1,98 @@
+### **✅ Add an Endpoint to Show Metrics as a Chart**  
+You can create a **FastAPI endpoint** (`/chart`) that renders a **real-time API latency chart** directly in your browser.
+
+---
+
+## **📌 Step 1: Install Dependencies**
+```bash
+pip install prometheus_client matplotlib fastapi uvicorn io
+```
+
+---
+
+## **📌 Step 2: Add `/chart` Endpoint in FastAPI**
+Modify your **FastAPI app** (`main.py`) to include:
+
+```python
+import time
+import io
+import matplotlib.pyplot as plt
+import requests
+from fastapi import FastAPI, Response
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+
+app = FastAPI()
+
+@app.get("/metrics")
+async def metrics():
+    """Expose Prometheus metrics at /metrics."""
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+@app.get("/chart")
+async def chart():
+    """Generate a real-time API latency chart and return as an image."""
+    metrics_url = "http://localhost:8000/metrics"
+    response = requests.get(metrics_url)
+
+    if response.status_code != 200:
+        return {"error": "Failed to fetch metrics"}
+
+    latencies = []
+    api_names = []
+
+    for line in response.text.split("\n"):
+        if line.startswith("api_latency_seconds_bucket") and 'le="0.5"' in line:  
+            parts = line.split()
+            labels = parts[0].split("{")[-1].split("}")[0].split(",")
+            api_name = labels[0].split("=")[-1].strip('"')
+            latency = float(parts[-1])
+            latencies.append(latency)
+            api_names.append(api_name)
+
+    if not latencies:
+        return {"error": "No latency data available"}
+
+    # Generate a bar chart
+    plt.figure(figsize=(10, 5))
+    plt.bar(api_names, latencies, color="blue")
+    plt.xlabel("API Name")
+    plt.ylabel("Latency (seconds)")
+    plt.title("API Latency Chart")
+    plt.xticks(rotation=45)
+
+    # Convert plot to image in memory
+    img_buf = io.BytesIO()
+    plt.savefig(img_buf, format="png")
+    img_buf.seek(0)
+    plt.close()
+
+    return Response(content=img_buf.getvalue(), media_type="image/png")
+```
+
+---
+
+## **📌 Step 3: Run Your FastAPI Server**
+Start your server:
+```bash
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+---
+
+## **📌 Step 4: View the Chart**
+Open your browser and go to:
+
+```
+http://localhost:8000/chart
+```
+
+You should see a **real-time latency chart** 📊 showing API response times.
+
+---
+
+## **🔥 Next Steps**
+- ✅ **Live charts in a browser**  
+- 🔄 **Auto-refresh every few seconds** (add a simple HTML page)  
+- 🚀 **More stats**: API success/failure rates, percentile latencies  
+
+Would you like a **real-time dashboard with auto-refresh?** 🚀
