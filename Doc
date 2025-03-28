@@ -1,0 +1,128 @@
+You need to **expose metrics using Prometheus** before accessing `http://localhost:8000/metrics`. Follow these steps to ensure it works:
+
+---
+
+## **1️⃣ Install Prometheus Client in Python**
+If not already installed, install the `prometheus_client` package:
+
+```bash
+pip install prometheus_client
+```
+
+---
+
+## **2️⃣ Modify `APIExecutionState` to Track Metrics**
+Update `APIExecutionState` to register **Prometheus counters and histograms**.
+
+```python
+from prometheus_client import Counter, Histogram
+
+# Create Prometheus metrics
+api_calls_total = Counter("api_calls_total", "Total API calls", ["api_name", "status"])
+api_latency_seconds = Histogram("api_latency_seconds", "API call latency", ["api_name"])
+
+class APIExecutionState(BaseModel):
+    last_api: Optional[str] = None
+    next_api: Optional[str] = None
+    execution_results: Dict[str, Dict] = {}
+    api_metrics: List[Dict] = []
+
+    def record_metrics(self, api_name: str, latency: float, success: bool):
+        """Records per API call execution metrics."""
+        self.api_metrics.append({
+            "api_name": api_name,
+            "latency": latency,
+            "status": "success" if success else "failure",
+            "timestamp": time.time(),
+        })
+
+        # Update Prometheus metrics
+        api_calls_total.labels(api_name=api_name, status="success" if success else "failure").inc()
+        api_latency_seconds.labels(api_name=api_name).observe(latency)
+```
+
+---
+
+## **3️⃣ Expose `/metrics` Endpoint**
+Start a Prometheus metrics HTTP server.
+
+```python
+from prometheus_client import start_http_server
+import asyncio
+
+def start_metrics_server(port=8000):
+    """Starts a Prometheus metrics server."""
+    start_http_server(port)
+    print(f"Prometheus metrics available at http://localhost:{port}/metrics")
+```
+
+Call this function **before running load tests**:
+
+```python
+start_metrics_server(8000)  # Run once at the beginning
+```
+
+---
+
+## **4️⃣ Update `run_load_test()`**
+Modify the function to ensure Prometheus metrics are updated.
+
+```python
+async def run_load_test():
+    """
+    Runs a load test with 100 concurrent users, tracks metrics, and exposes them via Prometheus.
+    """
+    chain = langgraph.compile()
+    states = [APIExecutionState() for _ in range(100)]
+
+    start_metrics_server(8000)  # Expose Prometheus metrics
+
+    await asyncio.gather(*[execute_test(chain, state) for state in states])
+
+    save_metrics(states)  # Save results for offline analysis
+```
+
+---
+
+## **5️⃣ Verify `/metrics` in Browser**
+After running your test, open:
+
+```
+http://localhost:8000/metrics
+```
+
+You should see output like:
+
+```
+# HELP api_calls_total Total API calls
+# TYPE api_calls_total counter
+api_calls_total{api_name="/pet",status="success"} 10
+api_calls_total{api_name="/store/order",status="failure"} 3
+
+# HELP api_latency_seconds API call latency
+# TYPE api_latency_seconds histogram
+api_latency_seconds_bucket{api_name="/pet",le="0.1"} 5
+api_latency_seconds_bucket{api_name="/pet",le="0.5"} 9
+```
+
+---
+
+## **6️⃣ Add Metrics to Grafana**
+- **In Grafana**, add **Prometheus as a data source** (`http://localhost:8000`).
+- Use **PromQL queries** to create charts:
+  ```plaintext
+  sum(rate(api_calls_total[5m]))  # API calls per minute
+  histogram_quantile(0.95, sum(rate(api_latency_seconds_bucket[5m])) by (le))  # 95th percentile latency
+  ```
+
+---
+
+### **✅ Final Flow**
+1️⃣ **API calls update `api_calls_total` and `api_latency_seconds`.**  
+2️⃣ **Prometheus exposes metrics at `http://localhost:8000/metrics`.**  
+3️⃣ **Grafana scrapes the metrics to create real-time charts.**  
+
+---
+
+🔥 **Now you can visualize load test results in Grafana!**  
+Would you like **alerts if latency exceeds a threshold?** 🚀
