@@ -1,5 +1,5 @@
 **Goal:**
-Generate a Python script named `feature.py` to perform feature engineering on the provided cleaned datasets. The script should handle missing values, perform feature scaling, and encode categorical features consistently across train, validation, and test sets. It must also separate the target variable and save all resulting datasets and fitted transformers. Ensure the date index present in the input files is preserved in all output feature DataFrames.
+Generate a Python script named `feature.py` to perform feature engineering on the provided cleaned datasets. The script should first create new domain-specific features (market signals), then handle missing values in all features, perform feature scaling, and encode categorical features consistently across train, validation, and test sets. It must also separate the target variable and save all resulting datasets and fitted transformers. Ensure the date index present in the input files is preserved in all output feature DataFrames.
 
 **Input Files (located in the current directory):**
 1.  `Cleaned_Train.csv` (training data)
@@ -7,6 +7,7 @@ Generate a Python script named `feature.py` to perform feature engineering on th
 3.  `Cleaned_Test.csv` (test data)
 4.  `eda_result_summary.txt` (for insights, if helpful)
 5.  `preliminary_analysis_report.txt` (for insights, if helpful)
+    *(These input files are expected to contain columns like 'Open', 'High', 'Low', 'Close', 'Volume' or similar, in addition to any other existing features.)*
 
 **Target Variable:**
 The target variable to be separated is named 'Close'.
@@ -14,67 +15,82 @@ The target variable to be separated is named 'Close'.
 **Date Index:**
 The input CSV files have a date index (assume it's named 'numeric_date_idx' or infer from data if no specific name given in reports). This index MUST be preserved in all output feature DataFrames (`x_train.csv`, `x_val.csv`, `x_test.csv`).
 
-**Core Tasks for `feature.py`:**
+**Core Tasks for `feature.py` (in order):**
 
 1.  **Load Data:**
     * Load `Cleaned_Train.csv`, `Cleaned_Val.csv`, and `Cleaned_Test.csv` into pandas DataFrames, ensuring the date index is correctly set.
 
 2.  **Separate Target Variable:**
     * From each DataFrame (train, val, test), separate the target variable ('Close') into `y_train`, `y_val`, and `y_test`.
-    * The remaining columns will form `X_train`, `X_val`, and `X_test`.
+    * The remaining columns will form `X_train_raw`, `X_val_raw`, and `X_test_raw`.
 
-3.  **Missing Value Imputation (CRITICAL FOR CONSISTENCY):**
-    * **Identify Column Types:** Automatically distinguish between numerical and categorical columns in `X_train`.
+3.  **Initial Missing Value Imputation (for existing raw features BEFORE creating new time-series features):**
+    * This step is to ensure that calculations for technical indicators have complete data to work with from the original features.
+    * **Identify Column Types:** Distinguish between numerical and categorical columns in `X_train_raw`.
     * **Numerical Imputation:**
-        * Initialize a `SimpleImputer` from `sklearn.impute` with a suitable strategy (e.g., 'median'). Use insights from the provided reports to choose the best strategy if possible.
-        * **Fit this numerical imputer *ONLY* on the numerical columns of `X_train`.**
-        * **Save the fitted numerical imputer object** to a file named `numerical_imputer.pkl` using `joblib`.
-        * Use this *fitted* numerical imputer to **transform** the numerical columns in `X_train`, `X_val`, and `X_test`.
+        * Initialize and fit a `SimpleImputer` (e.g., strategy 'median' or 'ffill' for time series) *ONLY* on numerical columns of `X_train_raw`. Save as `initial_numerical_imputer.pkl`.
+        * Transform numerical columns in `X_train_raw`, `X_val_raw`, and `X_test_raw`.
     * **Categorical Imputation:**
-        * Initialize a `SimpleImputer` from `sklearn.impute` with a suitable strategy (e.g., 'most_frequent' or 'constant' with a fill_value like 'Missing'). Use insights from provided reports if possible.
-        * **Fit this categorical imputer *ONLY* on the categorical columns of `X_train`.**
-        * **Save the fitted categorical imputer object** to a file named `categorical_imputer.pkl` using `joblib`.
-        * Use this *fitted* categorical imputer to **transform** the categorical columns in `X_train`, `X_val`, and `X_test`.
-    * Ensure that after imputation, the DataFrames retain their original column names (for the imputed columns) and the preserved date index. Combine imputed numerical and categorical columns back into `X_train`, `X_val`, `X_test`.
+        * Initialize and fit a `SimpleImputer` (e.g., strategy 'most_frequent') *ONLY* on categorical columns of `X_train_raw`. Save as `initial_categorical_imputer.pkl`.
+        * Transform categorical columns in `X_train_raw`, `X_val_raw`, and `X_test_raw`.
+    * Let the results be `X_train_imputed1`, `X_val_imputed1`, `X_test_imputed1`.
 
-4.  **Feature Scaling (Numerical Features - CRITICAL FOR CONSISTENCY):**
-    * Apply this step *after* numerical imputation.
-    * Initialize a `StandardScaler` from `sklearn.preprocessing`.
-    * **Fit the `StandardScaler` *ONLY* on the numerical columns of the imputed `X_train`.**
-    * **Save the fitted `StandardScaler` object** to a file named `scaler.pkl` using `joblib`.
-    * Use this *fitted* scaler to **transform** the numerical columns in the imputed `X_train`, `X_val`, and `X_test`.
-    * Ensure the output is a DataFrame with original numerical column names and the preserved date index.
+4.  **Domain-Specific Feature Creation (Market Signals):**
+    * Using the `X_train_imputed1`, `X_val_imputed1`, and `X_test_imputed1` DataFrames (which should contain 'Open', 'High', 'Low', 'Close', 'Volume' columns or similar from the input files):
+    * Generate a set of common technical indicators and market signals. You can use libraries like `pandas` for rolling calculations, or if the execution environment supports it, `TA-Lib` or `pandas_ta` (if using these, include necessary imports). Consider features such as:
+        * Moving Averages: e.g., SMA_7, SMA_21, EMA_14 for the 'Close' price (or another relevant price column).
+        * Lag Features: e.g., 'Close_lag_1', 'Close_lag_3', 'Volume_lag_1'.
+        * Rate of Change (ROC): e.g., for 'Close' price over 1 day or N days.
+        * Relative Strength Index (RSI): e.g., for a 14-day period.
+        * Moving Average Convergence Divergence (MACD): With common parameters.
+        * Bollinger Bands: Upper, Middle (which is an SMA), and Lower bands.
+        * Volatility: e.g., rolling standard deviation of 'Close' price returns over N days.
+        * Other indicators: Stochastics, Average True Range (ATR), etc.
+    * Choose appropriate window sizes for these indicators (e.g., 7, 14, 21, 30, 50 days) or use insights from the EDA reports if available to guide your choices.
+    * Append these new features to `X_train_imputed1`, `X_val_imputed1`, and `X_test_imputed1`. Let the results be `X_train_with_signals`, `X_val_with_signals`, `X_test_with_signals`.
+    * **Handle NaNs Introduced by New Features:** Creating lag features or rolling window features will introduce NaNs at the beginning of each series. **After generating all new features, drop any rows that now contain NaNs resulting from these calculations.** This should be done consistently across `X_train_with_signals` (and its corresponding `y_train`), `X_val_with_signals` (and `y_val`), and `X_test_with_signals` (and `y_test`) to ensure all data fed to the model is complete and aligned. Be careful to drop corresponding rows from `y_train`, `y_val`, `y_test` as well. After dropping, re-assign to `X_train`, `X_val`, `X_test` and their corresponding `y` variables.
 
-5.  **Categorical Feature Encoding (CRITICAL FOR CONSISTENCY):**
-    * Apply this step *after* categorical imputation.
-    * Identify remaining categorical columns in the imputed `X_train`.
-    * Initialize a `OneHotEncoder` from `sklearn.preprocessing` (set `handle_unknown='ignore'` and `sparse_output=False`).
-    * **Fit the `OneHotEncoder` *ONLY* on the categorical columns of the imputed `X_train`.**
-    * **Save the fitted `OneHotEncoder` object** (and any associated data like feature names if necessary for reconstruction) to a file named `one_hot_encoder.pkl` using `joblib`.
-    * Use this *fitted* encoder to **transform** the categorical columns in `X_train`, `X_val`, and `X_test`.
-    * Concatenate these newly encoded features with the numerical (and scaled) features. Ensure the date index is preserved. Be mindful of new column names generated by one-hot encoding.
+5.  **Final Missing Value Imputation (CRITICAL FOR CONSISTENCY - for any remaining NaNs in *all* features):**
+    * This step handles any NaNs that might still exist or were introduced by features not perfectly handled by the previous drop (e.g., from categorical features or if some indicators had internal NaNs not at the start).
+    * **Identify Column Types:** Automatically distinguish between numerical and categorical columns in the current `X_train`.
+    * **Numerical Imputation:**
+        * Initialize a `SimpleImputer` (e.g., 'median').
+        * **Fit this numerical imputer *ONLY* on the numerical columns of the current `X_train`.**
+        * **Save as `final_numerical_imputer.pkl`**.
+        * Use it to **transform** numerical columns in `X_train`, `X_val`, and `X_test`.
+    * **Categorical Imputation:**
+        * Initialize a `SimpleImputer` (e.g., 'most_frequent').
+        * **Fit this categorical imputer *ONLY* on the categorical columns of the current `X_train`.**
+        * **Save as `final_categorical_imputer.pkl`**.
+        * Use it to **transform** categorical columns in `X_train`, `X_val`, and `X_test`.
+    * Combine imputed columns back. Let the results be `X_train_imputed2`, `X_val_imputed2`, `X_test_imputed2`.
 
-6.  **Output Files:**
-    * The script `feature.py` should save the following files to the current directory:
-        * **Fitted Transformers:**
-            * `numerical_imputer.pkl`
-            * `categorical_imputer.pkl`
-            * `scaler.pkl`
-            * `one_hot_encoder.pkl`
-        * **Processed Feature Sets (X):**
-            * `x_train.csv` (containing fully processed features for training, with date index)
-            * `x_val.csv` (containing fully processed features for validation, with date index)
-            * `x_test.csv` (containing fully processed features for testing, with date index)
-        * **Target Variables (y):**
-            * `y_train.csv` (with date index and header)
-            * `y_val.csv` (with date index and header)
-            * `y_test.csv` (with date index and header)
-    * The prompt from the user also mentioned saving `Features_Train.csv`, `Features_Val.csv`, `Features_Test.csv`. For clarity, assume these are equivalent to `x_train.csv`, `x_val.csv`, and `x_test.csv` respectively, unless explicitly defined otherwise by the insights from the provided reports. Prioritize saving `x_train.csv`, `x_val.csv`, `x_test.csv` along with their `y` counterparts.
+6.  **Feature Scaling (Numerical Features - CRITICAL FOR CONSISTENCY):**
+    * Apply this step *after all imputation and new feature creation*.
+    * Initialize a `StandardScaler`.
+    * **Fit the `StandardScaler` *ONLY* on the numerical columns of `X_train_imputed2`.**
+    * **Save as `scaler.pkl`**.
+    * Use it to **transform** numerical columns in `X_train_imputed2`, `X_val_imputed2`, and `X_test_imputed2`.
+    * Let the results be `X_train_scaled`, `X_val_scaled`, `X_test_scaled`.
+
+7.  **Categorical Feature Encoding (CRITICAL FOR CONSISTENCY):**
+    * Apply this step *after all imputation*.
+    * Identify remaining categorical columns in `X_train_imputed2`.
+    * Initialize a `OneHotEncoder` (set `handle_unknown='ignore'`, `sparse_output=False`).
+    * **Fit it *ONLY* on the categorical columns of `X_train_imputed2`.**
+    * **Save as `one_hot_encoder.pkl`**.
+    * Use it to **transform** categorical columns in `X_train_imputed2`, `X_val_imputed2`, and `X_test_imputed2`.
+    * Concatenate newly encoded features with the numerical (and scaled) features to form the final `X_train_final`, `X_val_final`, `X_test_final`. Ensure date index is preserved.
+
+8.  **Output Files:**
+    * The script `feature.py` should save:
+        * **Fitted Transformers:** `initial_numerical_imputer.pkl`, `initial_categorical_imputer.pkl`, `final_numerical_imputer.pkl`, `final_categorical_imputer.pkl`, `scaler.pkl`, `one_hot_encoder.pkl`.
+        * **Processed Feature Sets (X):** `x_train.csv` (from `X_train_final`), `x_val.csv` (from `X_val_final`), `x_test.csv` (from `X_test_final`).
+        * **Target Variables (y):** `y_train.csv`, `y_val.csv`, `y_test.csv` (these are the versions after potential row drops in step 4).
 
 **Important Considerations for Code Generation:**
-* The script should use `pandas` for data manipulation and `sklearn` for transformations.
-* Ensure all file operations (loading CSVs, saving CSVs, saving transformers with `joblib`) use paths relative to the current directory.
-* The script should be robust and print informative messages about its progress (e.g., "Fitting numerical imputer on training data...", "Transforming test data...", "Saving x_train.csv...").
-* Consider edge cases like no numerical columns, no categorical columns, or no NaNs found (the script should handle these gracefully).
+* The script should use `pandas` for data manipulation and `sklearn` for transformations. If `TA-Lib` or `pandas_ta` are suggested for technical indicators, ensure the agent notes them as dependencies.
+* All file operations use paths relative to the current directory.
+* The script should be robust, print informative messages, and handle edge cases (e.g., no categorical columns, all data imputed in the initial step).
 
-This prompt gives GPT-4o a clear set of instructions, emphasizing the critical aspects of consistent application of transformers and saving them for later use (e.g., by the `ModelEvaluation_Agent`).
+This revised prompt now explicitly guides GPT-4o to not only preprocess existing features but also to **create new, domain-relevant market signals**, and then handle all data consistently. The two-stage imputation (initial before signal generation, final after signal generation and NaN-row-dropping) offers more robustness.
