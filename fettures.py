@@ -1,166 +1,572 @@
+"""
 **Agent Goal:**
+Generate a Python script (`eda_script.py`) to perform detailed EDA and cleaning
+on stock data.
+
+**Overall Objective:**
+Perform detailed EDA and cleaning on `initially_processed_data.csv` (path to be provided as an input to eda_script.py).
+The script MUST leverage specific insights from the embedded Preliminary Analysis Report below.
+After cleaning and EDA, it must chronologically split the data (e.g., 0.7 train, 0.15 val, 0.15 test ratios)
+into `Cleaned_Train.csv`, `Cleaned_Val.csv`, and `Cleaned_Test.csv` (preserving `numeric_date_idx` as index and ensuring
+'Close' and other OHLCV columns are included). A detailed `eda_result_summary_content` string (also saved as `eda_result_summary.txt`)
+must be produced.
+
+**Python Script Inputs (for `eda_script.py`):**
+* `processed_data_path`: String, path to `initially_processed_data.csv`.
+* `preliminary_analysis_report_content`: String, the full text content from the Preliminary Analysis Report provided below.
+* `train_ratio`: Float, e.g., 0.7.
+* `val_ratio`: Float, e.g., 0.15.
+* `test_ratio`: Float, e.g., 0.15. (Note: The sum of these should be 1.0)
+* `target_column`: String, 'Close'.
+* `ohlcv_columns`: List of Strings, ['Open', 'High', 'Low', 'Close', 'Volume'].
+* `date_index_name`: String, 'numeric_date_idx'.
+
+**Python Script Instructions (for `eda_script.py`):**
+
+1.  **Load Data:**
+    * Load `processed_data_path` into a pandas DataFrame, confirming `numeric_date_idx` as the index.
+
+2.  **Perform Targeted Data Cleaning:**
+    * Analyze the `preliminary_analysis_report_content` provided below to identify specific data quality issues
+        (e.g., missing values, incorrect data types, or anomalies in specific columns like 'Date' or OHLCV data).
+    * Implement cleaning steps based on these identified issues. For example:
+        * If the report indicates parsing issues with the 'Date' column, ensure rows with `NaT` (Not a Time) are handled (e.g., dropped if they are few and represent bad data, or imputed if appropriate for the domain and many). The `PreliminaryAnalysisAgent` already handled this by dropping rows with `NaT` in 'Date'. Confirm that no `NaT` values exist in the date-related columns after loading.
+        * Address any missing values identified in the `preliminary_analysis_report_content` for OHLCV or other critical columns. For time series, forward-fill or backward-fill might be appropriate, or dropping rows/columns if missingness is extensive and critical. Prioritize imputation for 'Close' and 'Volume' if missing.
+        * Check for and handle any obvious outliers or erroneous values in OHLCV columns (e.g., negative prices, excessively high volumes, or 'Low' being greater than 'High'). Use descriptive statistics and visualizations to identify them. Consider capping or removing extreme outliers if they are clearly data entry errors.
+        * Ensure all OHLCV columns are numeric. Convert if necessary.
+
+3.  **Conduct In-depth EDA on Conceptual Training Portion:**
+    * Before splitting, or after a preliminary split for EDA purposes (but not for final saved files), analyze distributions, correlations, and time-series patterns for 'Close' and 'Volume'.
+    * **Generate key visualizations or provide detailed textual descriptions for the `eda_result_summary_content`:**
+        * **Distributions:** Histograms/KDE plots for 'Close', 'Volume', 'Open', 'High', 'Low' (and potentially other numeric columns) to observe their distributions, skewness, and potential outliers.
+        * **Time-series plots:** Plot 'Close' and 'Volume' over time to observe trends, seasonality (if any), and volatility.
+        * **Correlations:** Heatmap of correlations between OHLCV columns.
+        * **Missing Value Visualization:** A bar chart or heatmap showing missing values across columns after cleaning.
+        * **Outlier Detection (Textual):** Describe any identified outliers and the strategy chosen to handle them.
+    * Summarize findings for the `eda_result_summary_content`.
+
+4.  **Chronologically Split Data:**
+    * Split the *full, cleaned* DataFrame into training, validation, and test sets based on the provided ratios (`train_ratio`, `val_ratio`, `test_ratio`). Maintain chronological order.
+    * Ensure 'Close' and `ohlcv_columns` are present in all split DataFrames.
+
+**Python Script Outputs (Files to be created):**
+1.  `Cleaned_Train.csv`: Training DataFrame (with `index=True` for `numeric_date_idx`).
+2.  `Cleaned_Val.csv`: Validation DataFrame (with `index=True` for `numeric_date_idx`).
+3.  `Cleaned_Test.csv`: Test DataFrame (with `index=True` for `numeric_date_idx`).
+4.  `eda_result_summary.txt`: Text file containing the detailed `eda_result_summary_content` string.
+
+**Python Script Output Validation (Logic to be included at the end of `eda_script.py`):**
+1.  Verify that `Cleaned_Train.csv`, `Cleaned_Val.csv`, `Cleaned_Test.csv`, and `eda_result_summary.txt` were created.
+2.  Load each `Cleaned_*.csv` into temporary DataFrames.
+3.  Check:
+    * `numeric_date_idx` is the index for all loaded DataFrames.
+    * Shapes align with the split ratios (approximately).
+    * 'Close' and all `ohlcv_columns` exist in each DataFrame.
+    * There are no `NaN` values in the 'Close' column of any split dataset.
+4.  Print a status message: "EDA outputs validated successfully." or appropriate error messages if checks fail.
+
+**Agent's Final Return Values (for `EDAAgent` node):**
+* Path to `Cleaned_Train.csv`
+* Path to `Cleaned_Val.csv`
+* Path to `Cleaned_Test.csv`
+* The string content of `eda_result_summary.txt`
+
+**Preliminary Analysis Report Content (Embedded):**
+
+Here are the fixed and structured prompt strings, ready for you to embed in your Python code using f-strings.
+
+Preliminary Analysis Agent Instructions (For generating preliminary_script.py)
+Agent Goal:
 Generate a Python script that performs initial loading, inspection, and date standardization for raw stock data, then saves a report and the processed DataFrame.
 
-**Agent Inputs:**
-* `raw_data_path`: String, path to the raw stock data CSV file.
+Agent Inputs:
 
-**Agent Output Script Name:** `preliminary_script.py`
+raw_data_path: String, path to the raw stock data CSV file.
+Agent Output Script Name: preliminary_script.py
 
-**Python Script Instructions (for `preliminary_script.py`):**
+Python Script Instructions (for preliminary_script.py):
 
-1.  **Load & Inspect Data:**
-    * Load the CSV from `raw_data_path` into a pandas DataFrame.
-    * Collect for reporting: DataFrame shape, `.info()` output, `.head(5)` output, `.describe(include='all')` output, initial missing value counts per column (`.isnull().sum()`), and unique value counts per column (`.nunique()`).
-2.  **Date Handling & Indexing:**
-    * Identify and parse the primary 'Date' column to pandas datetime objects. Handle parsing issues gracefully and note them for the report.
-    * Sort the DataFrame chronologically by this 'Date' column.
-    * Create a new column named `numeric_date_idx` from the 'Date' column (e.g., Unix timestamp in seconds).
-    * Set `numeric_date_idx` as the DataFrame's index.
-    * Ensure the original 'Date' column (as datetime objects) is retained within the DataFrame.
-3.  **Prepare Report Content:** Compile all collected inspection details (from step 1) and date handling actions (from step 2) into a single string.
+Load & Inspect Data:
+Load the CSV from raw_data_path into a pandas DataFrame.
+Collect for reporting: DataFrame shape, .info() output, .head(5) output, .describe(include='all') output, initial missing value counts per column (.isnull().sum()), and unique value counts per column (.nunique()).
+Date Handling & Indexing:
+Identify and parse the primary 'Date' column to pandas datetime objects. Handle parsing issues gracefully (e.g., by coercing errors to NaT and dropping corresponding rows) and note them for the report.
+Sort the DataFrame chronologically by this 'Date' column.
+Create a new column named numeric_date_idx from the 'Date' column (e.g., Unix timestamp in seconds).
+Set numeric_date_idx as the DataFrame's index.
+Ensure the original 'Date' column (as datetime objects) is retained within the DataFrame.
+Prepare Report Content: Compile all collected inspection details (from step 1) and date handling actions (from step 2) into a single string.
+Python Script Outputs (Files to be created):
+
+initially_processed_data.csv: The processed DataFrame with the 'Date' column and numeric_date_idx as index (saved with index=True).
+preliminary_analysis_report.txt: Text file containing the report content string from step 3 of "Python Script Instructions".
+Python Script Output Validation (Logic to be included at the end of preliminary_script.py):
+
+Verify that initially_processed_data.csv and preliminary_analysis_report.txt were created.
+Load initially_processed_data.csv into a temporary DataFrame.
+Check:
+Its shape is as expected (non-empty).
+Its index is named numeric_date_idx.
+The 'Date' column exists.
+Print a status message: "Preliminary analysis outputs validated successfully." or appropriate error messages if checks fail.
+Agent's Final Return Values (for LangGraph state):
+
+Path to initially_processed_data.csv.
+The string content of preliminary_analysis_report.txt.
+EDA Agent Prompt (For generating eda_script.py)
+Python
+
+"""
+**Agent Goal:**
+Generate a Python script (`eda_script.py`) to perform detailed EDA and cleaning
+on stock data.
+
+**Overall Objective:**
+Perform detailed EDA and cleaning on `initially_processed_data.csv` (path to be provided as an input to eda_script.py).
+The script MUST leverage specific insights from the embedded Preliminary Analysis Report below.
+After cleaning and EDA, it must chronologically split the data (e.g., 0.7 train, 0.15 val, 0.15 test ratios)
+into `Cleaned_Train.csv`, `Cleaned_Val.csv`, and `Cleaned_Test.csv` (preserving `numeric_date_idx` as index and ensuring
+'Close' and other OHLCV columns are included). A detailed `eda_result_summary_content` string (also saved as `eda_result_summary.txt`)
+must be produced.
+
+**Python Script Inputs (for `eda_script.py`):**
+* `processed_data_path`: String, path to `initially_processed_data.csv`.
+* `preliminary_analysis_report_content`: String, the full text content from the Preliminary Analysis Report provided below.
+* `train_ratio`: Float, e.g., 0.7.
+* `val_ratio`: Float, e.g., 0.15.
+* `test_ratio`: Float, e.g., 0.15. (Note: The sum of these should be 1.0)
+* `target_column`: String, 'Close'.
+* `ohlcv_columns`: List of Strings, ['Open', 'High', 'Low', 'Close', 'Volume'].
+* `date_index_name`: String, 'numeric_date_idx'.
+
+**Python Script Instructions (for `eda_script.py`):**
+
+1.  **Load Data:**
+    * Load `processed_data_path` into a pandas DataFrame, confirming `numeric_date_idx` as the index.
+
+2.  **Perform Targeted Data Cleaning:**
+    * Analyze the `preliminary_analysis_report_content` provided below to identify specific data quality issues
+        (e.g., missing values, incorrect data types, or anomalies in specific columns like 'Date' or OHLCV data).
+    * Implement cleaning steps based on these identified issues. For example:
+        * If the report indicates parsing issues with the 'Date' column, ensure rows with `NaT` (Not a Time) are handled (e.g., dropped if they are few and represent bad data, or imputed if appropriate for the domain and many). The `PreliminaryAnalysisAgent` already handled this by dropping rows with `NaT` in 'Date'. Confirm that no `NaT` values exist in the date-related columns after loading.
+        * Address any missing values identified in the `preliminary_analysis_report_content` for OHLCV or other critical columns. For time series, forward-fill or backward-fill might be appropriate, or dropping rows/columns if missingness is extensive and critical. Prioritize imputation for 'Close' and 'Volume' if missing.
+        * Check for and handle any obvious outliers or erroneous values in OHLCV columns (e.g., negative prices, excessively high volumes, or 'Low' being greater than 'High'). Use descriptive statistics and visualizations to identify them. Consider capping or removing extreme outliers if they are clearly data entry errors.
+        * Ensure all OHLCV columns are numeric. Convert if necessary.
+
+3.  **Conduct In-depth EDA on Conceptual Training Portion:**
+    * Before splitting, or after a preliminary split for EDA purposes (but not for final saved files), analyze distributions, correlations, and time-series patterns for 'Close' and 'Volume'.
+    * **Generate key visualizations or provide detailed textual descriptions for the `eda_result_summary_content`:**
+        * **Distributions:** Histograms/KDE plots for 'Close', 'Volume', 'Open', 'High', 'Low' (and potentially other numeric columns) to observe their distributions, skewness, and potential outliers.
+        * **Time-series plots:** Plot 'Close' and 'Volume' over time to observe trends, seasonality (if any), and volatility.
+        * **Correlations:** Heatmap of correlations between OHLCV columns.
+        * **Missing Value Visualization:** A bar chart or heatmap showing missing values across columns after cleaning.
+        * **Outlier Detection (Textual):** Describe any identified outliers and the strategy chosen to handle them.
+    * Summarize findings for the `eda_result_summary_content`.
+
+4.  **Chronologically Split Data:**
+    * Split the *full, cleaned* DataFrame into training, validation, and test sets based on the provided ratios (`train_ratio`, `val_ratio`, `test_ratio`). Maintain chronological order.
+    * Ensure 'Close' and `ohlcv_columns` are present in all split DataFrames.
 
 **Python Script Outputs (Files to be created):**
-1.  `initially_processed_data.csv`: The processed DataFrame with the 'Date' column and `numeric_date_idx` as index (saved with `index=True`).
-2.  `preliminary_analysis_report.txt`: Text file containing the report content string from step 3 of "Python Script Instructions".
+1.  `Cleaned_Train.csv`: Training DataFrame (with `index=True` for `numeric_date_idx`).
+2.  `Cleaned_Val.csv`: Validation DataFrame (with `index=True` for `numeric_date_idx`).
+3.  `Cleaned_Test.csv`: Test DataFrame (with `index=True` for `numeric_date_idx`).
+4.  `eda_result_summary.txt`: Text file containing the detailed `eda_result_summary_content` string.
 
-**Python Script Output Validation (Logic to be included at the end of `preliminary_script.py`):**
-1.  Verify that `initially_processed_data.csv` and `preliminary_analysis_report.txt` were created.
-2.  Load `initially_processed_data.csv` into a temporary DataFrame.
+**Python Script Output Validation (Logic to be included at the end of `eda_script.py`):**
+1.  Verify that `Cleaned_Train.csv`, `Cleaned_Val.csv`, `Cleaned_Test.csv`, and `eda_result_summary.txt` were created.
+2.  Load each `Cleaned_*.csv` into temporary DataFrames.
 3.  Check:
-    * Its shape is as expected (non-empty).
-    * Its index is named `numeric_date_idx`.
-    * The 'Date' column exists.
-4.  Print a status message: "Preliminary analysis outputs validated successfully." or appropriate error messages if checks fail.
+    * `numeric_date_idx` is the index for all loaded DataFrames.
+    * Shapes align with the split ratios (approximately).
+    * 'Close' and all `ohlcv_columns` exist in each DataFrame.
+    * There are no `NaN` values in the 'Close' column of any split dataset.
+4.  Print a status message: "EDA outputs validated successfully." or appropriate error messages if checks fail.
 
-**Agent's Final Return Values (for LangGraph state):**
-* Path to `initially_processed_data.csv`.
-* The string content of `preliminary_analysis_report.txt`.
+**Agent's Final Return Values (for `EDAAgent` node):**
+* Path to `Cleaned_Train.csv`
+* Path to `Cleaned_Val.csv`
+* Path to `Cleaned_Test.csv`
+* The string content of `eda_result_summary.txt`
 
+**Preliminary Analysis Report Content (Embedded):**
+{preliminary_analysis_report_content}
 
-
-
-
-
-
-
-
-
+"""
 
 
 
+
+
+
+
+"""
 **Agent Goal:**
-Generate a detailed and actionable **prompt string**. This prompt string will be used by a subsequent `EDAAgent` to guide its Python script generation (`eda_script.py`). The generated prompt must be based *exclusively* on the findings within the provided `{preliminary_analysis_report_content}`.
+Generate a Python script (`feature.py`) to perform dynamic and comprehensive feature engineering.
 
-**Agent Inputs:**
-* `{preliminary_analysis_report_content}`: String, full text content from the `PreliminaryAnalysisAgent`'s `preliminary_analysis_report.txt`.
+**Overall Objective:**
+Perform dynamic and comprehensive feature engineering using `Cleaned_*.csv` data (paths to be provided).
+The script MUST leverage insights from the embedded Preliminary Analysis Report and EDA Summary below
+to dynamically propose, justify, and create relevant market signals.
+It must follow a strict order:
+1. Initial imputation (on full DataFrames, including 'Close').
+2. New market signal creation (using 'Close' and other OHLCV from full, imputed DataFrames).
+3. Handle NaNs from new signals (row drops on full DataFrames, ensuring y-alignment later).
+4. THEN, separate target ('Close').
+5. Finally, apply final imputation/scaling/encoding to X features (fit ONLY on train, transform all, save transformers).
+All outputs (processed X/Y datasets, fitted transformers) must be saved, along with a detailed
+`feature_engineering_report_content` string (also saved as `feature_engineering_report.txt`).
+`numeric_date_idx` MUST be preserved.
 
-**Agent Output:**
-* A single, well-structured **prompt string** to be used by the `EDAAgent`.
+**Python Script Inputs (for `feature.py`):**
+* `cleaned_train_path`: String, path to `Cleaned_Train.csv`.
+* `cleaned_val_path`: String, path to `Cleaned_Val.csv`.
+* `cleaned_test_path`: String, path to `Cleaned_Test.csv`.
+* `preliminary_analysis_report_content`: String, the full text content from the Preliminary Analysis Report provided below.
+* `eda_result_summary_content`: String, the full text content from the EDA Result Summary provided below.
+* `target_column_name`: String, 'Close'.
+* `date_index_name`: String, 'numeric_date_idx'.
 
-**Key Requirements for the Generated Prompt String (for the `EDAAgent`):**
-The prompt string you generate must instruct the `EDAAgent` that its `eda_script.py` should achieve the following:
-* **Overall Objective:** Perform detailed EDA and cleaning on `initially_processed_data.csv` (path to be provided to `EDAAgent`). The script MUST leverage specific insights from the embedded `{preliminary_analysis_report_content}` (which you will place into the prompt you are generating for the EDAAgent). After cleaning and EDA, it must chronologically split the data (e.g., 0.7 train, 0.15 val, 0.15 test ratios) into `Cleaned_Train.csv`, `Cleaned_Val.csv`, and `Cleaned_Test.csv` (preserving `numeric_date_idx` as index and ensuring 'Close' and other OHLCV columns are included). A detailed `eda_result_summary_content` string (also saved as `eda_result_summary.txt`) must be produced.
-* **Script Inputs for `eda_script.py`:**
-    * Path to `initially_processed_data.csv`.
-    * The embedded `{preliminary_analysis_report_content}`.
-    * Split Ratios.
-* **Script Instructions for `eda_script.py`:**
-    1.  Load `initially_processed_data.csv` (confirming `numeric_date_idx` as index).
-    2.  Perform targeted data cleaning based *specifically* on issues noted in embedded `{preliminary_analysis_report_content}`.
-    3.  Conduct in-depth EDA on the conceptual training portion (generate/save key visualizations or provide detailed textual descriptions for report; analyze distributions, correlations, time-series patterns for 'Close', 'Volume').
-    4.  Chronologically split the full, cleaned DataFrame. Ensure 'Close' and OHLCV columns are present.
-* **Script Outputs for `eda_script.py`:**
-    * `Cleaned_Train.csv`, `Cleaned_Val.csv`, `Cleaned_Test.csv` (all with `index=True` for `numeric_date_idx`).
-    * `eda_result_summary.txt` (containing the detailed `eda_result_summary_content` string).
-* **Script Output Validation for `eda_script.py`:**
-    * Check all specified CSV and TXT files are created.
-    * Load each `Cleaned_*.csv`; verify `numeric_date_idx` is index, shapes align with ratios, 'Close' and other key OHLCV columns exist. Print validation status.
-* **Agent's Final Return Values (for `EDAAgent` node):** Paths to cleaned CSVs and the `eda_result_summary_content` string.
+**Python Script Key Operational Sequence (for `feature.py`):**
 
+1.  **Load Data:**
+    * Load `Cleaned_Train.csv`, `Cleaned_Val.csv`, `Cleaned_Test.csv` into DataFrames.
+    * Ensure `date_index_name` is set as the index for all loaded DataFrames.
 
+2.  **Initial Imputation (on entire DataFrames, including 'Close'):**
+    * Identify columns with missing values (if any were not fully addressed by EDA).
+    * Apply an initial imputation strategy (e.g., forward-fill, backward-fill, or mean/median for non-time-sensitive features) to the *entire* `train`, `val`, and `test` DataFrames.
+    * **Fit any imputer ONLY on the training data**, then transform all three datasets (`train`, `val`, `test`).
+    * **Save fitted initial imputer(s)** (e.g., `initial_imputer.pkl` if using scikit-learn imputers).
 
+3.  **Dynamic Market Signal Generation:**
+    * **Analyze the embedded `{preliminary_analysis_report_content}` and `{eda_result_summary_content}` to identify potential relationships, trends, or characteristics (e.g., volatility, volume patterns, price movements) that could be good indicators.**
+    * **Propose and justify (in `feature_engineering_report_content`) at least 3-5 relevant market signals/features.** Examples could include:
+        * **Lagged features:** 'Close' price lagged by 1, 5, 20 days.
+        * **Moving Averages (SMA, EMA):** Short-term (e.g., 5-day, 10-day) and long-term (e.g., 20-day, 50-day) moving averages of 'Close' price.
+        * **Volatility measures:** Rolling standard deviation of 'Close' price.
+        * **Daily Returns:** Percentage change in 'Close' price.
+        * **OHLCV-derived features:** High-Low difference, Open-Close difference.
+        * **Volume-related features:** Lagged Volume, Volume Rate of Change.
+    * **Create these new features** and append them to the DataFrames. Clearly document the chosen features and their parameters in the `feature_engineering_report_content`.
 
+4.  **Post-Signal NaN Handling (on full DataFrames, still including target):**
+    * New features (especially lagged or rolling ones) will likely introduce NaNs at the beginning of the time series.
+    * Handle these new NaNs. **The recommended strategy is to drop rows with NaNs only if they occur at the very beginning of the series due to feature creation.** This ensures all X and y values align chronologically. If NaNs appear elsewhere, investigate and document for report (may require more sophisticated imputation if not from feature creation).
+    * Ensure this dropping is applied consistently across all three datasets (`train`, `val`, `test`) to maintain aligned time periods.
 
-**Agent Goal:**
-Generate a detailed and actionable **prompt string**. This prompt string will be used by a subsequent `FeatureEngineeringAgent` to guide its Python script generation (`feature.py`). The generated prompt must be based *exclusively* on the findings within the provided `{preliminary_analysis_report_content}` and `{eda_result_summary_content}`.
+5.  **Separate Target ('Close') into y_sets, remainder is X_sets:**
+    * After all feature creation and associated NaN handling, separate the `target_column_name` ('Close') from the features for `train`, `val`, and `test` datasets.
+    * Result: `X_train`, `y_train`, `X_val`, `y_val`, `X_test`, `y_test`. Preserve `date_index_name` in all X and y DataFrames.
 
-**Agent Inputs:**
-* `{preliminary_analysis_report_content}`: String, full text content from `PreliminaryAnalysisAgent`.
-* `{eda_result_summary_content}`: String, full text content from `EDAAgent`.
+6.  **Final Imputation (X features only):**
+    * Re-check for any remaining NaNs *only* in the `X` feature sets (should primarily be from categorical encoding if not handled, or other edge cases).
+    * Apply a final imputation strategy (e.g., median imputation for numerical features).
+    * **Fit any imputer ONLY on `X_train`**, then transform `X_train`, `X_val`, `X_test`.
+    * **Save fitted final imputer(s)** (e.g., `final_imputer.pkl`).
 
-**Agent Output:**
-* A single, well-structured **prompt string** to be used by the `FeatureEngineeringAgent`.
+7.  **Feature Scaling (Numerical X features):**
+    * Identify all numerical features in `X_train`.
+    * Apply a scaling technique (e.g., `StandardScaler` or `MinMaxScaler`).
+    * **Fit the scaler ONLY on `X_train`**, then transform `X_train`, `X_val`, `X_test`.
+    * **Save the fitted scaler** (e.g., `scaler.pkl`).
 
-**Key Requirements for the Generated Prompt String (for the `FeatureEngineeringAgent`):**
-The prompt string you generate must instruct the `FeatureEngineeringAgent` that its `feature.py` script should achieve the following:
-* **Overall Objective:** Perform dynamic and comprehensive feature engineering using `Cleaned_*.csv` data (paths to be provided to `FeatureEngineeringAgent`). The script MUST leverage insights from embedded `{preliminary_analysis_report_content}` and `{eda_result_summary_content}` (which you will place in the prompt you are generating) to dynamically propose, justify, and create relevant market signals. It must follow a strict order: 1. Initial imputation (on full DataFrames, including 'Close'). 2. New market signal creation (using 'Close' and other OHLCV from full, imputed DataFrames). 3. Handle NaNs from new signals (row drops on full DataFrames, ensuring y-alignment later). 4. THEN, separate target ('Close'). 5. Finally, apply final imputation/scaling/encoding to X features (fit ONLY on train, transform all, save transformers). All outputs (processed X/Y datasets, fitted transformers) must be saved, along with a detailed `feature_engineering_report_content` string (also saved as `feature_engineering_report.txt`). `numeric_date_idx` MUST be preserved.
-* **Script Inputs for `feature.py`:**
-    * Paths to `Cleaned_Train.csv`, `Cleaned_Val.csv`, `Cleaned_Test.csv`.
-    * Embedded `{preliminary_analysis_report_content}` and `{eda_result_summary_content}`.
-    * `target_column_name`: 'Close'.
-    * `date_index_name`: 'numeric_date_idx'.
-* **Script Key Operational Sequence for `feature.py` (abbreviated - you will detail this based on our prior discussions):**
-    1.  Load Data.
-    2.  Initial Imputation (on entire DFs, fit on train, save `initial_*.pkl`, transform all).
-    3.  Dynamic Market Signal Generation (analyze reports, propose/justify/create/parameterize signals from OHLCV including 'Close', append, log for report).
-    4.  Post-Signal NaN Handling (drop rows from DFs still including target).
-    5.  Separate Target ('Close') into y_sets, remainder is X_sets.
-    6.  Final Imputation (X features only, fit on X_train, save `final_*.pkl`, transform X_sets).
-    7.  Feature Scaling (Numerical X, fit on X_train, save `scaler.pkl`, transform X_sets).
-    8.  Categorical Encoding (Categorical X, fit on X_train, save `one_hot_encoder.pkl`, transform X_sets). Combine X features, preserve index.
-* **Script Outputs for `feature.py`:**
-    * All specified transformer `.pkl` files.
-    * `x_train.csv`, `y_train.csv`, etc. (all with `index=True` for `date_index_name`).
-    * `feature_engineering_report.txt` (containing the detailed `feature_engineering_report_content` string: dynamic choices, params, all steps, transformers, final feature list, shapes).
-* **Script Output Validation for `feature.py`:**
-    * Check all `.pkl` & `.csv` files exist. Load `x_*.csv`, verify index, no NaNs, shapes. Load `y_*.csv`, verify shape alignment. Print validation status.
-* **Agent's Final Return Values (for `FeatureEngineeringAgent` node):** Paths to X/Y CSVs, transformer paths, and the `feature_engineering_report_content` string.
+8.  **Categorical Encoding (Categorical X features):**
+    * Identify any categorical features (if any were present or created, e.g., 'Category' from dummy data).
+    * Apply one-hot encoding or another suitable encoding scheme.
+    * **Fit the encoder ONLY on `X_train`**, then transform `X_train`, `X_val`, `X_test`.
+    * **Save the fitted encoder** (e.g., `one_hot_encoder.pkl`).
+    * Combine the processed numerical and encoded categorical features into the final `X_train`, `X_val`, `X_test` DataFrames, ensuring `date_index_name` is preserved.
 
-
-
-
-
-**Agent Goal:**
-Generate a Python script (`model_training.py`) to select, train, and tune a regression model. This script will use feature-engineered datasets and insights from embedded reports. It must perform hyperparameter tuning using `TimeSeriesSplit`, save the final model, and report validation metrics.
-
-**Agent Inputs:**
-* `x_train_path`: Path to `x_train.csv`.
-* `y_train_path`: Path to `y_train.csv`.
-* `x_val_path`: Path to `x_val.csv`.
-* `y_val_path`: Path to `y_val.csv`.
-* `{preliminary_analysis_report_content}`: Embedded text.
-* `{eda_result_summary_content}`: Embedded text.
-* `{feature_engineering_report_content}`: Embedded text.
-* `date_index_name`: 'numeric_date_idx'.
-
-**Agent Output Script Name:** `model_training.py`
-
-**Python Script Instructions (for `model_training.py`):**
-
-1.  **Load Data:** Load from input paths, setting `date_index_name` as index.
-2.  **Dynamic Model Selection:**
-    * Analyze embedded reports (especially `{feature_engineering_report_content}` for feature characteristics).
-    * Propose 1-2 suitable regression model types (e.g., XGBoost, LightGBM) with brief justification.
-3.  **Hyperparameter Tuning:**
-    * For chosen model(s), define search space. Use `GridSearchCV` or `RandomizedSearchCV`.
-    * **Use `TimeSeriesSplit` (from `sklearn.model_selection`) as the `cv` strategy.**
-    * Use regression scoring (e.g., `'neg_root_mean_squared_error'`). Fit using `x_train` and `y_train`.
-4.  **Train Final Model:** With best HPs, train on entire `x_train`, `y_train`.
-5.  **Evaluate on Validation Set:** Predict on `x_val` and calculate/report RMSE, MAE, R² against `y_val`.
-6.  **Prepare Report Content:** Compile model choice justification, HPs, validation metrics, and path to model into a single string.
+9.  **Prepare Report Content:**
+    * Compile `feature_engineering_report_content` string detailing:
+        * Dynamic choices made for feature generation (justification for each signal).
+        * Parameters used for each signal (e.g., window sizes for MAs).
+        * Detailed steps for initial imputation, post-signal NaN handling, final imputation, scaling, and encoding.
+        * Paths to all saved transformers.
+        * Final list of features in the `X` DataFrames.
+        * Shapes of `X_train`, `y_train`, `X_val`, `y_val`, `X_test`, `y_test`.
 
 **Python Script Outputs (Files to be created):**
-1.  `trained_model.pkl`: Saved final trained model (using `joblib`).
-2.  `model_training_report.txt`: Text file containing the report content string from step 6 of "Python Script Instructions".
+1.  All specified transformer `.pkl` files (e.g., `initial_imputer.pkl`, `final_imputer.pkl`, `scaler.pkl`, `one_hot_encoder.pkl`).
+2.  `x_train.csv`, `y_train.csv`, `x_val.csv`, `y_val.csv`, `x_test.csv`, `y_test.csv` (all with `index=True` for `date_index_name`).
+3.  `feature_engineering_report.txt`: Text file containing the detailed `feature_engineering_report_content` string.
 
-**Python Script Output Validation (Logic to be included at the end of `model_training.py`):**
-1.  Verify `trained_model.pkl` and `model_training_report.txt` were created.
-2.  Attempt to load `trained_model.pkl` back to ensure it's valid.
-3.  Print a status message: "Model training outputs validated successfully." or appropriate error messages.
+**Python Script Output Validation (Logic to be included at the end of `feature.py`):**
+1.  Verify all `.pkl` and `.csv` files exist.
+2.  Load `x_train.csv`, `x_val.csv`, `x_test.csv` into temporary DataFrames.
+3.  Check:
+    * `date_index_name` is the index for all `x_*.csv` DataFrames.
+    * No NaNs in `x_train`, `x_val`, `x_test` (after final imputation).
+    * Shapes align as expected.
+4.  Load `y_train.csv`, `y_val.csv`, `y_test.csv` into temporary DataFrames.
+5.  Check:
+    * Shapes align with their respective `X` DataFrames.
+    * `date_index_name` is the index for all `y_*.csv` DataFrames.
+6.  Attempt to load each `.pkl` file to ensure they are valid (e.g., `joblib.load`).
+7.  Print a status message: "Feature engineering outputs validated successfully." or appropriate error messages.
 
-**Agent's Final Return Values (for LangGraph state):**
-* Path to `trained_model.pkl`.
-* The string content of `model_training_report.txt`.
+**Agent's Final Return Values (for `FeatureEngineeringAgent` node):**
+* Path to `x_train.csv`
+* Path to `y_train.csv`
+* Path to `x_val.csv`
+* Path to `y_val.csv`
+* Path to `x_test.csv`
+* Path to `y_test.csv`
+* List of paths to all saved transformer `.pkl` files.
+* The string content of `feature_engineering_report.txt`.
+
+**Preliminary Analysis Report Content (Embedded):**
+Here are the fixed and structured prompt strings, ready for you to embed in your Python code using f-strings.
+
+Preliminary Analysis Agent Instructions (For generating preliminary_script.py)
+Agent Goal:
+Generate a Python script that performs initial loading, inspection, and date standardization for raw stock data, then saves a report and the processed DataFrame.
+
+Agent Inputs:
+
+raw_data_path: String, path to the raw stock data CSV file.
+Agent Output Script Name: preliminary_script.py
+
+Python Script Instructions (for preliminary_script.py):
+
+Load & Inspect Data:
+Load the CSV from raw_data_path into a pandas DataFrame.
+Collect for reporting: DataFrame shape, .info() output, .head(5) output, .describe(include='all') output, initial missing value counts per column (.isnull().sum()), and unique value counts per column (.nunique()).
+Date Handling & Indexing:
+Identify and parse the primary 'Date' column to pandas datetime objects. Handle parsing issues gracefully (e.g., by coercing errors to NaT and dropping corresponding rows) and note them for the report.
+Sort the DataFrame chronologically by this 'Date' column.
+Create a new column named numeric_date_idx from the 'Date' column (e.g., Unix timestamp in seconds).
+Set numeric_date_idx as the DataFrame's index.
+Ensure the original 'Date' column (as datetime objects) is retained within the DataFrame.
+Prepare Report Content: Compile all collected inspection details (from step 1) and date handling actions (from step 2) into a single string.
+Python Script Outputs (Files to be created):
+
+initially_processed_data.csv: The processed DataFrame with the 'Date' column and numeric_date_idx as index (saved with index=True).
+preliminary_analysis_report.txt: Text file containing the report content string from step 3 of "Python Script Instructions".
+Python Script Output Validation (Logic to be included at the end of preliminary_script.py):
+
+Verify that initially_processed_data.csv and preliminary_analysis_report.txt were created.
+Load initially_processed_data.csv into a temporary DataFrame.
+Check:
+Its shape is as expected (non-empty).
+Its index is named numeric_date_idx.
+The 'Date' column exists.
+Print a status message: "Preliminary analysis outputs validated successfully." or appropriate error messages if checks fail.
+Agent's Final Return Values (for LangGraph state):
+
+Path to initially_processed_data.csv.
+The string content of preliminary_analysis_report.txt.
+EDA Agent Prompt (For generating eda_script.py)
+Python
+
+"""
+**Agent Goal:**
+Generate a Python script (`eda_script.py`) to perform detailed EDA and cleaning
+on stock data.
+
+**Overall Objective:**
+Perform detailed EDA and cleaning on `initially_processed_data.csv` (path to be provided as an input to eda_script.py).
+The script MUST leverage specific insights from the embedded Preliminary Analysis Report below.
+After cleaning and EDA, it must chronologically split the data (e.g., 0.7 train, 0.15 val, 0.15 test ratios)
+into `Cleaned_Train.csv`, `Cleaned_Val.csv`, and `Cleaned_Test.csv` (preserving `numeric_date_idx` as index and ensuring
+'Close' and other OHLCV columns are included). A detailed `eda_result_summary_content` string (also saved as `eda_result_summary.txt`)
+must be produced.
+
+**Python Script Inputs (for `eda_script.py`):**
+* `processed_data_path`: String, path to `initially_processed_data.csv`.
+* `preliminary_analysis_report_content`: String, the full text content from the Preliminary Analysis Report provided below.
+* `train_ratio`: Float, e.g., 0.7.
+* `val_ratio`: Float, e.g., 0.15.
+* `test_ratio`: Float, e.g., 0.15. (Note: The sum of these should be 1.0)
+* `target_column`: String, 'Close'.
+* `ohlcv_columns`: List of Strings, ['Open', 'High', 'Low', 'Close', 'Volume'].
+* `date_index_name`: String, 'numeric_date_idx'.
+
+**Python Script Instructions (for `eda_script.py`):**
+
+1.  **Load Data:**
+    * Load `processed_data_path` into a pandas DataFrame, confirming `numeric_date_idx` as the index.
+
+2.  **Perform Targeted Data Cleaning:**
+    * Analyze the `preliminary_analysis_report_content` provided below to identify specific data quality issues
+        (e.g., missing values, incorrect data types, or anomalies in specific columns like 'Date' or OHLCV data).
+    * Implement cleaning steps based on these identified issues. For example:
+        * If the report indicates parsing issues with the 'Date' column, ensure rows with `NaT` (Not a Time) are handled (e.g., dropped if they are few and represent bad data, or imputed if appropriate for the domain and many). The `PreliminaryAnalysisAgent` already handled this by dropping rows with `NaT` in 'Date'. Confirm that no `NaT` values exist in the date-related columns after loading.
+        * Address any missing values identified in the `preliminary_analysis_report_content` for OHLCV or other critical columns. For time series, forward-fill or backward-fill might be appropriate, or dropping rows/columns if missingness is extensive and critical. Prioritize imputation for 'Close' and 'Volume' if missing.
+        * Check for and handle any obvious outliers or erroneous values in OHLCV columns (e.g., negative prices, excessively high volumes, or 'Low' being greater than 'High'). Use descriptive statistics and visualizations to identify them. Consider capping or removing extreme outliers if they are clearly data entry errors.
+        * Ensure all OHLCV columns are numeric. Convert if necessary.
+
+3.  **Conduct In-depth EDA on Conceptual Training Portion:**
+    * Before splitting, or after a preliminary split for EDA purposes (but not for final saved files), analyze distributions, correlations, and time-series patterns for 'Close' and 'Volume'.
+    * **Generate key visualizations or provide detailed textual descriptions for the `eda_result_summary_content`:**
+        * **Distributions:** Histograms/KDE plots for 'Close', 'Volume', 'Open', 'High', 'Low' (and potentially other numeric columns) to observe their distributions, skewness, and potential outliers.
+        * **Time-series plots:** Plot 'Close' and 'Volume' over time to observe trends, seasonality (if any), and volatility.
+        * **Correlations:** Heatmap of correlations between OHLCV columns.
+        * **Missing Value Visualization:** A bar chart or heatmap showing missing values across columns after cleaning.
+        * **Outlier Detection (Textual):** Describe any identified outliers and the strategy chosen to handle them.
+    * Summarize findings for the `eda_result_summary_content`.
+
+4.  **Chronologically Split Data:**
+    * Split the *full, cleaned* DataFrame into training, validation, and test sets based on the provided ratios (`train_ratio`, `val_ratio`, `test_ratio`). Maintain chronological order.
+    * Ensure 'Close' and `ohlcv_columns` are present in all split DataFrames.
+
+**Python Script Outputs (Files to be created):**
+1.  `Cleaned_Train.csv`: Training DataFrame (with `index=True` for `numeric_date_idx`).
+2.  `Cleaned_Val.csv`: Validation DataFrame (with `index=True` for `numeric_date_idx`).
+3.  `Cleaned_Test.csv`: Test DataFrame (with `index=True` for `numeric_date_idx`).
+4.  `eda_result_summary.txt`: Text file containing the detailed `eda_result_summary_content` string.
+
+**Python Script Output Validation (Logic to be included at the end of `eda_script.py`):**
+1.  Verify that `Cleaned_Train.csv`, `Cleaned_Val.csv`, `Cleaned_Test.csv`, and `eda_result_summary.txt` were created.
+2.  Load each `Cleaned_*.csv` into temporary DataFrames.
+3.  Check:
+    * `numeric_date_idx` is the index for all loaded DataFrames.
+    * Shapes align with the split ratios (approximately).
+    * 'Close' and all `ohlcv_columns` exist in each DataFrame.
+    * There are no `NaN` values in the 'Close' column of any split dataset.
+4.  Print a status message: "EDA outputs validated successfully." or appropriate error messages if checks fail.
+
+**Agent's Final Return Values (for `EDAAgent` node):**
+* Path to `Cleaned_Train.csv`
+* Path to `Cleaned_Val.csv`
+* Path to `Cleaned_Test.csv`
+* The string content of `eda_result_summary.txt`
+
+**Preliminary Analysis Report Content (Embedded):**
+{preliminary_analysis_report_content}
+
+"""
+Feature Engineering Agent Prompt (For generating feature.py)
+Python
+
+"""
+**Agent Goal:**
+Generate a Python script (`feature.py`) to perform dynamic and comprehensive feature engineering.
+
+**Overall Objective:**
+Perform dynamic and comprehensive feature engineering using `Cleaned_*.csv` data (paths to be provided).
+The script MUST leverage insights from the embedded Preliminary Analysis Report and EDA Summary below
+to dynamically propose, justify, and create relevant market signals.
+It must follow a strict order:
+1. Initial imputation (on full DataFrames, including 'Close').
+2. New market signal creation (using 'Close' and other OHLCV from full, imputed DataFrames).
+3. Handle NaNs from new signals (row drops on full DataFrames, ensuring y-alignment later).
+4. THEN, separate target ('Close').
+5. Finally, apply final imputation/scaling/encoding to X features (fit ONLY on train, transform all, save transformers).
+All outputs (processed X/Y datasets, fitted transformers) must be saved, along with a detailed
+`feature_engineering_report_content` string (also saved as `feature_engineering_report.txt`).
+`numeric_date_idx` MUST be preserved.
+
+**Python Script Inputs (for `feature.py`):**
+* `cleaned_train_path`: String, path to `Cleaned_Train.csv`.
+* `cleaned_val_path`: String, path to `Cleaned_Val.csv`.
+* `cleaned_test_path`: String, path to `Cleaned_Test.csv`.
+* `preliminary_analysis_report_content`: String, the full text content from the Preliminary Analysis Report provided below.
+* `eda_result_summary_content`: String, the full text content from the EDA Result Summary provided below.
+* `target_column_name`: String, 'Close'.
+* `date_index_name`: String, 'numeric_date_idx'.
+
+**Python Script Key Operational Sequence (for `feature.py`):**
+
+1.  **Load Data:**
+    * Load `Cleaned_Train.csv`, `Cleaned_Val.csv`, `Cleaned_Test.csv` into DataFrames.
+    * Ensure `date_index_name` is set as the index for all loaded DataFrames.
+
+2.  **Initial Imputation (on entire DataFrames, including 'Close'):**
+    * Identify columns with missing values (if any were not fully addressed by EDA).
+    * Apply an initial imputation strategy (e.g., forward-fill, backward-fill, or mean/median for non-time-sensitive features) to the *entire* `train`, `val`, and `test` DataFrames.
+    * **Fit any imputer ONLY on the training data**, then transform all three datasets (`train`, `val`, `test`).
+    * **Save fitted initial imputer(s)** (e.g., `initial_imputer.pkl` if using scikit-learn imputers).
+
+3.  **Dynamic Market Signal Generation:**
+    * **Analyze the embedded `{preliminary_analysis_report_content}` and `{eda_result_summary_content}` to identify potential relationships, trends, or characteristics (e.g., volatility, volume patterns, price movements) that could be good indicators.**
+    * **Propose and justify (in `feature_engineering_report_content`) at least 3-5 relevant market signals/features.** Examples could include:
+        * **Lagged features:** 'Close' price lagged by 1, 5, 20 days.
+        * **Moving Averages (SMA, EMA):** Short-term (e.g., 5-day, 10-day) and long-term (e.g., 20-day, 50-day) moving averages of 'Close' price.
+        * **Volatility measures:** Rolling standard deviation of 'Close' price.
+        * **Daily Returns:** Percentage change in 'Close' price.
+        * **OHLCV-derived features:** High-Low difference, Open-Close difference.
+        * **Volume-related features:** Lagged Volume, Volume Rate of Change.
+    * **Create these new features** and append them to the DataFrames. Clearly document the chosen features and their parameters in the `feature_engineering_report_content`.
+
+4.  **Post-Signal NaN Handling (on full DataFrames, still including target):**
+    * New features (especially lagged or rolling ones) will likely introduce NaNs at the beginning of the time series.
+    * Handle these new NaNs. **The recommended strategy is to drop rows with NaNs only if they occur at the very beginning of the series due to feature creation.** This ensures all X and y values align chronologically. If NaNs appear elsewhere, investigate and document for report (may require more sophisticated imputation if not from feature creation).
+    * Ensure this dropping is applied consistently across all three datasets (`train`, `val`, `test`) to maintain aligned time periods.
+
+5.  **Separate Target ('Close') into y_sets, remainder is X_sets:**
+    * After all feature creation and associated NaN handling, separate the `target_column_name` ('Close') from the features for `train`, `val`, and `test` datasets.
+    * Result: `X_train`, `y_train`, `X_val`, `y_val`, `X_test`, `y_test`. Preserve `date_index_name` in all X and y DataFrames.
+
+6.  **Final Imputation (X features only):**
+    * Re-check for any remaining NaNs *only* in the `X` feature sets (should primarily be from categorical encoding if not handled, or other edge cases).
+    * Apply a final imputation strategy (e.g., median imputation for numerical features).
+    * **Fit any imputer ONLY on `X_train`**, then transform `X_train`, `X_val`, `X_test`.
+    * **Save fitted final imputer(s)** (e.g., `final_imputer.pkl`).
+
+7.  **Feature Scaling (Numerical X features):**
+    * Identify all numerical features in `X_train`.
+    * Apply a scaling technique (e.g., `StandardScaler` or `MinMaxScaler`).
+    * **Fit the scaler ONLY on `X_train`**, then transform `X_train`, `X_val`, `X_test`.
+    * **Save the fitted scaler** (e.g., `scaler.pkl`).
+
+8.  **Categorical Encoding (Categorical X features):**
+    * Identify any categorical features (if any were present or created, e.g., 'Category' from dummy data).
+    * Apply one-hot encoding or another suitable encoding scheme.
+    * **Fit the encoder ONLY on `X_train`**, then transform `X_train`, `X_val`, `X_test`.
+    * **Save the fitted encoder** (e.g., `one_hot_encoder.pkl`).
+    * Combine the processed numerical and encoded categorical features into the final `X_train`, `X_val`, `X_test` DataFrames, ensuring `date_index_name` is preserved.
+
+9.  **Prepare Report Content:**
+    * Compile `feature_engineering_report_content` string detailing:
+        * Dynamic choices made for feature generation (justification for each signal).
+        * Parameters used for each signal (e.g., window sizes for MAs).
+        * Detailed steps for initial imputation, post-signal NaN handling, final imputation, scaling, and encoding.
+        * Paths to all saved transformers.
+        * Final list of features in the `X` DataFrames.
+        * Shapes of `X_train`, `y_train`, `X_val`, `y_val`, `X_test`, `y_test`.
+
+**Python Script Outputs (Files to be created):**
+1.  All specified transformer `.pkl` files (e.g., `initial_imputer.pkl`, `final_imputer.pkl`, `scaler.pkl`, `one_hot_encoder.pkl`).
+2.  `x_train.csv`, `y_train.csv`, `x_val.csv`, `y_val.csv`, `x_test.csv`, `y_test.csv` (all with `index=True` for `date_index_name`).
+3.  `feature_engineering_report.txt`: Text file containing the detailed `feature_engineering_report_content` string.
+
+**Python Script Output Validation (Logic to be included at the end of `feature.py`):**
+1.  Verify all `.pkl` and `.csv` files exist.
+2.  Load `x_train.csv`, `x_val.csv`, `x_test.csv` into temporary DataFrames.
+3.  Check:
+    * `date_index_name` is the index for all `x_*.csv` DataFrames.
+    * No NaNs in `x_train`, `x_val`, `x_test` (after final imputation).
+    * Shapes align as expected.
+4.  Load `y_train.csv`, `y_val.csv`, `y_test.csv` into temporary DataFrames.
+5.  Check:
+    * Shapes align with their respective `X` DataFrames.
+    * `date_index_name` is the index for all `y_*.csv` DataFrames.
+6.  Attempt to load each `.pkl` file to ensure they are valid (e.g., `joblib.load`).
+7.  Print a status message: "Feature engineering outputs validated successfully." or appropriate error messages.
+
+**Agent's Final Return Values (for `FeatureEngineeringAgent` node):**
+* Path to `x_train.csv`
+* Path to `y_train.csv`
+* Path to `x_val.csv`
+* Path to `y_val.csv`
+* Path to `x_test.csv`
+* Path to `y_test.csv`
+* List of paths to all saved transformer `.pkl` files.
+* The string content of `feature_engineering_report.txt`.
+
+**Preliminary Analysis Report Content (Embedded):**
+{preliminary_analysis_report_content}
+
+
+**EDA Result Summary Content (Embedded):**
+{eda_result_summary_content}
+
+"""
+
+
+
 
 
 
