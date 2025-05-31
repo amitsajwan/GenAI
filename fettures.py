@@ -307,3 +307,66 @@ and report validation metrics.
 {feature_engineering_report_content}
 
 """
+
+
+evaluation_agent_prompt = """
+**Goal:**
+Generate a Python script (`model_evaluation.py`) to perform a comprehensive evaluation of the trained regression model on the test set.
+
+**Overall Objective:**
+Load the trained model and the test datasets (`x_test.csv`, `y_test.csv`), make predictions, calculate and report key regression metrics, and generate visualizations to assess model performance. A detailed `model_evaluation_report_content` string (also saved as `model_evaluation_report.txt`) must be produced.
+
+**Python Script Inputs (for `model_evaluation.py`):**
+* `trained_model_path`: String, path to `trained_model.pkl`.
+* `x_test_path`: String, path to `x_test.csv`.
+* `y_test_path`: String, path to `y_test.csv`.
+* `preliminary_analysis_report_content`: String, embedded text from Preliminary Analysis Report.
+* `eda_result_summary_content`: String, embedded text from EDA Result Summary.
+* `feature_engineering_report_content`: String, embedded text from Feature Engineering Report.
+* `model_training_report_content`: String, embedded text from Model Training Report.
+* `date_index_name`: String, 'numeric_date_idx'.
+* `target_column_name`: String, 'Close'.
+
+**Python Script Instructions (for `model_evaluation.py`):**
+
+1.  **Load Data and Model:**
+    * Load `x_test_path` and `y_test_path` into pandas DataFrames, ensuring `date_index_name` is set as the index.
+    * Load the `trained_model.pkl` using `joblib`.
+    * For `y_test`, convert to a Series if loaded as a DataFrame with a single column.
+
+2.  **Make Predictions:**
+    * Use the loaded model to make predictions on `X_test`.
+
+3.  **Calculate Evaluation Metrics:**
+    * Calculate the following regression metrics for the predictions against `y_test`:
+        * **Root Mean Squared Error (RMSE)**
+        * **Mean Absolute Error (MAE)**
+        * **R-squared (R²)**
+        * **Mean Absolute Percentage Error (MAPE)** - (You may need to define a custom function for this if not directly available in sklearn, handling division by zero for actual values of 0).
+
+4.  **Generate Visualizations:**
+    * **Time Series Plot of Actual vs. Predicted:** Plot `y_test` (actual values) and the model's predictions over time. This is crucial for time series data to visually inspect how well the model tracks trends and volatility.
+    * **Residuals Plot:** Plot the residuals (actual - predicted) against time or against predicted values. This helps in identifying patterns in errors (e.g., heteroscedasticity, autocorrelation).
+    * **Actual vs. Predicted Scatter Plot:** A scatter plot of actual `y_test` values against predicted values. Ideally, points should cluster around a 45-degree line.
+
+5.  **Prepare Report Content:**
+    * Compile `model_evaluation_report_content` string detailing:
+        * All calculated evaluation metrics (RMSE, MAE, R², MAPE).
+        * Interpretation of the metrics.
+        * Observations from the generated visualizations (e.g., model's ability to capture trends, presence of systematic errors).
+        * A summary of the model's overall performance and any identified strengths or weaknesses.
+        * Suggestions for future improvements or further analysis based on the evaluation.
+
+**Python Script Outputs (Files to be created):**
+1.  `model_evaluation_report.txt`: Text file containing the detailed `model_evaluation_report_content` string.
+2.  `actual_vs_predicted_plot.png`: Saved plot of actual vs. predicted values over time.
+3.  `residuals_plot.png`: Saved plot of residuals.
+4.  `actual_vs_predicted_scatter.png`: Saved scatter plot of actual vs. predicted values.
+
+**Python Script Output Validation (Logic to be included at the end of `model_evaluation.py`):**
+1.  Verify that `model_evaluation_report.txt`, `actual_vs_predicted_plot.png`, `residuals_plot.png`, and `actual_vs_predicted_scatter.png` were created.
+2.  Print a status message: "Model evaluation outputs validated successfully." or appropriate error messages if checks fail.
+
+**Agent's Final Return Values (for LangGraph state):**
+* The string content of `model_evaluation_report.txt`.
+"""
