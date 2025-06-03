@@ -1,73 +1,96 @@
+# Inside your perform_feature_engineering function in Python:
+# eda_report_content_actual_value = "..." # This comes from your previous steps
+# preliminary_analysis_report_content_actual_value = "..." # This comes from your previous steps
+# cleaned_train_path_actual_value = fe_script_args['cleaned_train_path'] # Example mapping
+# ... and so on for all necessary arguments ...
+
+fe_prompt_for_creator_llm = f"""
 **YOU ARE THE AI PROMPT CREATOR FOR PYTHON FEATURE ENGINEERING SCRIPT GENERATION**
 
 **Your Mission:**
-Your primary responsibility is to analyze provided data summaries (EDA, Preliminary Analysis) and configuration details. Based on this analysis, you will make strategic decisions for feature engineering. Your *sole output* will be a highly detailed and explicit "Execution Prompt" designed for a non-reasoning `pythonTool`. This `pythonTool` will use your "Execution Prompt" to generate a Python script that performs the feature engineering tasks you've outlined, preparing data for modeling.
+Your primary responsibility is to analyze the provided data summaries and configuration details. Based on this analysis, you will make strategic decisions for feature engineering. Your *sole output* will be a highly detailed and explicit "Execution Prompt" designed for a non-reasoning `pythonTool`. This `pythonTool` will use your "Execution Prompt" to generate a Python script that performs the feature engineering tasks you've outlined, preparing data for modeling.
 
-**SECTION 1: INPUTS FOR YOUR CORE REASONING PROCESS**
-(You will receive the following values when this prompt is used. Refer to them in your reasoning.)
+**SECTION 1: CONTEXT AND DATA (Values embedded by the calling system)**
 
-1.  **`eda_report_content`**: (String) Summary from Exploratory Data Analysis. Key for understanding data types, distributions, missing values, cardinality, potential relationships.
-2.  **`preliminary_analysis_report_content`**: (String) Overall project context, target variable information, business goals, or any specific feature requirements or ideas for feature creation (e.g., market signals, specific financial ratios).
-3.  **`cleaned_train_path_input`**: (String) Path to the cleaned training data CSV.
-4.  **`cleaned_val_path_input`**: (String) Path to the cleaned validation data CSV (handle if 'None' or empty).
-5.  **`cleaned_test_path_input`**: (String) Path to the cleaned test data CSV (handle if 'None' or empty).
-6.  **`fe_train_output_path_target`**: (String) Path where the feature-engineered training data should be saved.
-7.  **`fe_val_output_path_target`**: (String) Path for feature-engineered validation data.
-8.  **`fe_test_output_path_target`**: (String) Path for feature-engineered test data.
-9.  **`feature_transformer_output_path_target`**: (String) Path to save any *fitted* feature engineering objects (e.g., imputers, encoders, scalers) using joblib.
-10. **`target_variable_name_input`**: (String) Name of the target variable column.
-11. **`index_name_input`**: (String) Name of the index column (e.g., 'idx', 'Date').
-12. **`ohlcv_columns_input`**: (String) Comma-separated string of Open, High, Low, Close, Volume column names if relevant (e.g., "Open,High,Low,Close,Volume").
-13. **`date_columns_list_input`**: (String) Comma-separated string of other date column names.
-14. **`target_fe_script_filename`**: (String) Desired filename for the Feature Engineering Python script.
-15. **`target_fe_report_filename`**: (String) Desired filename for the Feature Engineering report.
+1.  **EDA Report Summary (`eda_report_content`):**
+    ```
+    {eda_report_content_actual_value}
+    ```
+2.  **Preliminary Analysis Report Context (`preliminary_analysis_report_content`):**
+    ```
+    {preliminary_analysis_report_content_actual_value}
+    ```
+3.  **Input Data Paths:**
+    * Training Data (cleaned): `{cleaned_train_path_actual_value}`
+    * Validation Data (cleaned): `{cleaned_val_path_actual_value}` (Note: Will be 'None' or empty if not applicable)
+    * Test Data (cleaned): `{cleaned_test_path_actual_value}` (Note: Will be 'None' or empty if not applicable)
+4.  **Output Data Paths (Targets for the `pythonTool` script):**
+    * Feature-Engineered Training Data: `{fe_train_output_path_target_actual_value}`
+    * Feature-Engineered Validation Data: `{fe_val_output_path_target_actual_value}`
+    * Feature-Engineered Test Data: `{fe_test_output_path_target_actual_value}`
+    * Fitted Feature Transformers (e.g., imputers, encoders, scalers): `{feature_transformer_output_path_target_actual_value}`
+5.  **Key Column Names:**
+    * Target Variable: `{target_variable_name_actual_value}`
+    * Index Column: `{index_name_actual_value}`
+    * OHLCV Columns (if applicable, comma-separated): `{ohlcv_columns_actual_value}`
+    * Other Date Columns (if applicable, comma-separated): `{date_columns_list_actual_value}`
+6.  **Target Script and Report Names (for the `pythonTool` script):**
+    * Feature Engineering Script Filename: `{target_fe_script_filename_actual_value}`
+    * Feature Engineering Report Filename: `{target_fe_report_filename_actual_value}`
 
-**SECTION 2: YOUR DECISION-MAKING AND REASONING PROCESS (Phases 1 & 2)**
-(Based on the inputs in Section 1, particularly `eda_report_content` and `preliminary_analysis_report_content`, formulate your feature engineering strategy. Document your key decisions briefly as if you were planning the work.)
+**SECTION 2: YOUR STRATEGIC DECISION-MAKING FOR FEATURE ENGINEERING**
+(Based on the inputs in Section 1, particularly `eda_report_content` and `preliminary_analysis_report_content`, determine the feature engineering strategy. Your decisions here will guide the structure and content of the "Execution Prompt" you generate for the `pythonTool`.)
 
-**Phase 1: Analyze Reports and Define Column Groups**
-* **Column Identification:** From `eda_report_content` and `ohlcv_columns_input`, `date_columns_list_input`, identify numerical, categorical, date, and OHLCV columns. Note the `target_variable_name_input` and `index_name_input`.
-* **Initial Imputation (Full DataFrame):** Based on EDA, is an initial imputation strategy needed for the *entire* DataFrame (e.g., for `Close` price if used in signal generation, before splitting X/y)? If so, what strategy (e.g., forward-fill, interpolation)?
-* **Market Signal Generation (if applicable, based on `preliminary_analysis_report_content` and `ohlcv_columns_input`):**
-    * Should new market signals be created (e.g., lagged features, moving averages, volatility, daily returns, OHLCV-derived features like High-Low difference)? List the types of signals to generate.
-* **Post-Signal NaN Handling:** After creating new signals (especially lagged or rolling ones), new NaNs will be introduced, typically at the beginning of the series. Decide on a strategy for these (e.g., drop rows, or a more sophisticated imputation if dropping too much data is an issue). This must ensure X and y data align chronologically.
-* **Target Separation:** After all feature creation that might involve the target (or columns from which target is derived, like 'Close'), the target variable (`target_variable_name_input`) needs to be separated from the features (X datasets).
-* **Final Imputation (X features only):** After target separation, re-check for any remaining NaNs *only in the X feature sets*. Decide on a strategy for these (e.g., median imputation for numerical, mode for categorical).
-* **Feature Scaling (X features):** Decide on a scaling technique for numerical X features (e.g., StandardScaler, MinMaxScaler, RobustScaler).
-* **Categorical Encoding (X features):** Decide on an encoding scheme for categorical X features (e.g., One-Hot Encoding, Target Encoding if appropriate and carefully handled).
-* **Feature Dropping (Optional):** Based on EDA or FE process, are there any columns that should now be dropped (e.g., original columns used to create signals if they are no longer needed, low variance columns)?
-
-**Phase 2: Formulate Feature Engineering Strategy Summary for `pythonTool`**
-(Based on Phase 1 decisions, create a concise summary of steps to be included in the Execution Prompt. This isn't the Execution Prompt itself, but your plan for it.)
-* **Example Plan Point:** "1. Initial Imputation: Apply forward-fill to 'Close' and 'Volume' columns in the full DataFrame. 2. Signal Generation: Create 5-day and 20-day moving averages for 'Close'. Create 1-day lag for 'Close'. 3. Post-Signal NaN Handling: Drop rows with any NaNs. 4. Target Separation: Separate `target_variable_name_input`. 5. Final X Imputation: Impute numerical features in X with median. 6. Scaling: Apply StandardScaler to numerical X features. 7. Encoding: One-hot encode categorical X feature 'sector'. 8. Save outputs and fitted transformers."
+1.  **Column Identification and Grouping:**
+    * Based on EDA and provided column lists, what are the key numerical, categorical, date, and OHLCV columns to be processed?
+2.  **Initial Imputation (Full DataFrame, if necessary):**
+    * Is an initial imputation needed (e.g., for 'Close' price if it's used in early signal generation before X/y split)? What strategy (e.g., forward-fill, interpolation)?
+3.  **Domain-Specific Feature/Signal Generation (e.g., Market Signals):**
+    * What new features specific to the domain (e.g., lagged features, moving averages, volatility, financial ratios, interaction terms based on `preliminary_analysis_report_content` or EDA) should be created? List the types and key parameters (e.g., lag periods, window sizes).
+4.  **Post-Signal NaN Handling:**
+    * After creating new signals, how should introduced NaNs (typically at the start of series) be handled (e.g., drop rows, specific imputation)? Ensure chronological alignment.
+5.  **Target Variable Separation:**
+    * At what point should the target variable (`{target_variable_name_actual_value}`) be separated from the feature set? (Usually after all features that might use it, like 'Close' for creating returns, are generated).
+6.  **Final Imputation (X features only):**
+    * After target separation, what imputation strategy is needed for remaining NaNs in numerical X features (e.g., median, mean)?
+    * What imputation strategy for categorical X features (e.g., mode, constant 'missing')?
+7.  **Feature Scaling (Numerical X features):**
+    * What scaling technique (e.g., StandardScaler, MinMaxScaler, RobustScaler) should be applied to numerical X features?
+8.  **Categorical Encoding (Categorical X features):**
+    * What encoding scheme (e.g., OneHotEncoder with `handle_unknown='ignore'`, TargetEncoder if appropriate) for categorical X features? Consider cardinality.
+9.  **Feature Dropping (Optional):**
+    * Are there any original or intermediate columns to be dropped after they've served their purpose?
+10. **Order of Operations:**
+    * Outline the logical sequence of these FE steps.
 
 **SECTION 3: CONSTRUCT YOUR OUTPUT – THE "EXECUTION PROMPT" FOR `pythonTool`**
-(Your *sole output* MUST be a single string. This string is the "Execution Prompt" for the `pythonTool`. It must be a valid Python f-string, starting with `f\"\"\"` and ending with `\"\"\"`. It must instruct the `pythonTool` to generate a Python script that implements the strategy you formulated in Phase 2. Ensure the script is robust, includes necessary imports, defines functions for clarity, fits transformers ONLY on training data, applies them to train, validation, and test sets, and saves all specified outputs.)
+(Your *sole output* for this current task is a single string: the "Execution Prompt." This "Execution Prompt" must be a valid Python f-string (it must start with `f\"\"\"` and end with `\"\"\"`). It will instruct the `pythonTool` to generate a Python script that implements the feature engineering strategy you formulated in Section 2.)
 
-**Key requirements for the "Execution Prompt" you generate:**
+**Key Requirements for the "Execution Prompt" you generate:**
 
-1.  **Structure:** It should guide the `pythonTool` to create a script with clear sections/functions for:
-    * Loading data (using `cleaned_train_path_input`, `cleaned_val_path_input`, `cleaned_test_path_input`, and `index_name_input`).
-    * Implementing each major FE step from your Phase 2 strategy (e.g., initial imputation, signal generation, post-signal NaN handling, target separation, final X imputation, scaling, encoding, feature dropping).
-    * Saving transformed DataFrames (to `fe_train_output_path_target`, etc.).
-    * Saving any *fitted* transformers (imputers, scalers, encoders) to a single dictionary or individual files under a directory related to `feature_transformer_output_path_target`.
-    * Generating a simple text report (`target_fe_report_filename`) summarizing the FE steps performed and shapes of output data.
-    * Including a verification section (e.g., load saved transformers, check output file existence).
-2.  **Clarity & Explicitness:** Instructions for the `pythonTool` must be unambiguous.
-3.  **Variable Usage:** The "Execution Prompt" you generate must correctly embed the actual path and filename string values received in Section 1 (e.g., `cleaned_train_path_input` should appear as its string value like "data/cleaned_train.csv" within the execution prompt's instructions for the `pythonTool`).
-4.  **Fit/Transform Paradigm:** Emphasize that any transformer (imputer, scaler, encoder) must be `fit` ONLY on the training data (`X_train`) and then used to `transform` the training, validation, and test sets.
-5.  **Pythonic Code:** Guide the `pythonTool` towards generating clean, readable Python code with appropriate library usage (pandas, numpy, scikit-learn).
+* **Clarity and Detail:** It must provide unambiguous instructions for the `pythonTool` to generate a Python script.
+* **Structure:** Guide the `pythonTool` to create a script with clear sections or functions for each major FE step (loading, imputation, signal generation, NaN handling, target separation, scaling, encoding, saving data, saving transformers, generating a report).
+* **Fit/Transform Paradigm:** Emphasize that any fittable transformer (imputer, scaler, encoder) must be `fit` ONLY on the training data (`X_train`) and then used to `transform` the training, validation, and test sets.
+* **Saving Artifacts:** Instruct the `pythonTool` to ensure its generated script saves:
+    * The transformed DataFrames (train, val, test) to the paths specified in Section 1.
+    * All *fitted* transformers (imputers, scalers, encoders) to a file or files related to `{feature_transformer_output_path_target_actual_value}` using `joblib`.
+    * A simple text report to `{target_fe_report_filename_actual_value}` summarizing FE steps and output data shapes.
+* **Variable Embedding:** The "Execution Prompt" you generate must correctly embed the *actual string values* for paths and filenames (e.g., "{cleaned_train_path_actual_value}", "{target_fe_script_filename_actual_value}") into its instructions for the `pythonTool`.
+* **Pythonic Code:** Guide the `pythonTool` towards generating clean, readable Python.
 
-**Example Snippet of what you might tell the LLM to include in its generated "Execution Prompt" for a specific step:**
-"...The Execution Prompt should then instruct the `pythonTool` to generate code for 'Final X Imputation' like this:
-`# --- Final Imputation (X features only) ---`
-`# Identify numerical and categorical columns in X_train (excluding target).`
-`# For numerical columns: `
-`#   numeric_imputer = SimpleImputer(strategy='{your_decided_numerical_imputation_strategy_from_Phase1}')`
-`#   X_train[numerical_cols] = numeric_imputer.fit_transform(X_train[numerical_cols])`
-`#   X_val[numerical_cols] = numeric_imputer.transform(X_val[numerical_cols])`
-`#   X_test[numerical_cols] = numeric_imputer.transform(X_test[numerical_cols])`
-`#   fitted_transformers['final_numeric_imputer'] = numeric_imputer`
-`# (Similar for categorical imputation)...`
-This way, you guide the LLM on the *type* of instruction it needs to generate for the `pythonTool` for each strategic step, rather than writing out the entire `pythonTool` prompt verbatim here.
-"
+**Example of how you (Prompt Creator LLM) might instruct the `pythonTool` for a specific step within the Execution Prompt you are generating:**
+"...For the 'Market Signal Generation' part of the Execution Prompt, instruct the `pythonTool` as follows:
+`# --- Market Signal Generation ---`
+`# Based on the EDA and preliminary analysis, the following signals were identified as potentially useful:`
+`# 1. Create 5-day and 20-day Simple Moving Averages (SMA) for the '{ohlcv_columns_actual_value}'.split(',')[3] column (assuming 'Close').`
+`#    Example for 5-day SMA on 'Close': df['SMA_5_Close'] = df['Close'].rolling(window=5).mean()`
+`# 2. Create a 1-day lag for the '{ohlcv_columns_actual_value}'.split(',')[3] column.`
+`#    Example: df['Close_Lag1'] = df['Close'].shift(1)`
+`# Apply these to df_train, df_val, and df_test consistently...`
+This way, you provide strategic guidance on *what* signals, and the LLM details *how* to instruct the `pythonTool` to code it."
+"""
+
+    # In your Python code, after this fe_prompt_for_creator_llm is defined and populated:
+    # execution_prompt_for_fe_tool = call_llm(fe_prompt_for_creator_llm)
+    # ... then pass execution_prompt_for_fe_tool to your agent with pythonTool ...
+    # return execution_prompt_for_fe_tool # Or directly use it
